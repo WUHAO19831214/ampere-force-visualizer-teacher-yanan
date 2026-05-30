@@ -39,36 +39,40 @@ export function LiveDataOverviewPanel() {
       <div className="panel-titlebar">
         <div>
           <h2>实时数据总览</h2>
-          <p>课堂展示用实时读数与视觉分析结果</p>
         </div>
       </div>
-      <div className="overview-actions">
-        <CsvExportButton
-          label={`导出屏幕数据 CSV（${store.screenSamples.length}）`}
-          onExport={() => exportScreenSamplesToCsv(store.screenSamples)}
-          disabled={store.screenSamples.length === 0}
-        />
-        <CsvExportButton
-          label={`导出摄像头数据 CSV（${store.visionSamples.length}）`}
-          onExport={() => exportVisionSamplesToCsv(store.visionSamples)}
-          disabled={store.visionSamples.length === 0}
-        />
-        <button className="danger-button" onClick={experimentDataActions.clearData}>
-          清空数据
-        </button>
-        <button className="secondary-button" onClick={adoptAllTesseract} disabled={store.screenRois.length === 0}>
-          全部采用 Tesseract 实时识别
-        </button>
-      </div>
-      {latestWarning && (
-        <div className="overview-warning" title={store.status.warnings.join('\n')}>
-          Warning：{latestWarning}
-        </div>
-      )}
       <div className="data-scroll">
         <LiveScreenDataPanel latestValues={store.latestScreenValues} roiStatuses={store.status.screenRoiStatuses} />
-        <LiveVisionDataPanel latestValues={store.latestVisionValues} />
-        <OcrMethodComparisonPanel />
+        <details className="advanced-tools-panel">
+          <summary>高级设置 / 调试工具</summary>
+          <div className="advanced-tools-content">
+            <div className="overview-actions">
+              <CsvExportButton
+                label={`导出屏幕数据 CSV（${store.screenSamples.length}）`}
+                onExport={() => exportScreenSamplesToCsv(store.screenSamples)}
+                disabled={store.screenSamples.length === 0}
+              />
+              <CsvExportButton
+                label={`导出摄像头数据 CSV（${store.visionSamples.length}）`}
+                onExport={() => exportVisionSamplesToCsv(store.visionSamples)}
+                disabled={store.visionSamples.length === 0}
+              />
+              <button className="danger-button" onClick={experimentDataActions.clearData}>
+                清空数据
+              </button>
+              <button className="secondary-button" onClick={adoptAllTesseract} disabled={store.screenRois.length === 0}>
+                全部采用 Tesseract 实时识别
+              </button>
+            </div>
+            {latestWarning && (
+              <div className="overview-warning" title={store.status.warnings.join('\n')}>
+                Warning：{latestWarning}
+              </div>
+            )}
+            <LiveVisionDataPanel latestValues={store.latestVisionValues} />
+            <OcrMethodComparisonPanel />
+          </div>
+        </details>
       </div>
     </section>
   );

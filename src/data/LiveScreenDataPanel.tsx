@@ -25,7 +25,7 @@ export function LiveScreenDataPanel({ latestValues, roiStatuses = {} }: LiveScre
         }));
 
   return (
-    <section className="data-section">
+    <section className="data-section classroom-screen-data">
       <h3>屏幕 ROI 数字识别数据</h3>
       <div className="live-grid">
         {values.length === 0 && <div className="compact-empty">等待屏幕 ROI 数据。</div>}
@@ -45,9 +45,7 @@ export function LiveScreenDataPanel({ latestValues, roiStatuses = {} }: LiveScre
                 {sample?.rawText && <span>rawText：{sample.rawText}</span>}
                 {sample?.confidence !== undefined && <span>置信度：{sample.confidence.toFixed(3)}</span>}
                 {sample?.durationMs !== undefined && <span>耗时：{sample.durationMs} ms</span>}
-                {sample?.timestamp && <span>最近更新：{new Date(sample.timestamp).toLocaleTimeString('zh-CN', { hour12: false })}</span>}
                 {!sample && <span>请确认屏幕捕获和 ROI 设置</span>}
-                {'warning' in status && status.warning && <span>warning：{status.warning}</span>}
               </div>
             </article>
           );

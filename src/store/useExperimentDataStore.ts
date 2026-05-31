@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type { ExperimentDataStore, RuntimeStatus } from '../types/experiment';
 import type { OcrMethodTestResult, PhysicsSample, RecognizerMethod, RoiConfig } from '../types/physics';
-import type { VisionSample } from '../types/vision';
+import type { MagneticFieldConfig, MagneticFieldDetectionResult, VisionSample } from '../types/vision';
 
 interface StoreState extends ExperimentDataStore {
   status: RuntimeStatus;
@@ -15,6 +15,26 @@ const initialState: StoreState = {
   screenRois: [],
   selectedScreenRoiId: undefined,
   ocrComparisonResults: {},
+  latestMagneticFieldDetection: undefined,
+  magneticFieldConfig: {
+    enabled: true,
+    showFieldLines: false,
+    detectionEnabled: true,
+    redThreshold: {
+      rMin: 150,
+      gMax: 115,
+      bMax: 115,
+    },
+    blueThreshold: {
+      bMin: 140,
+      rMax: 120,
+      gMax: 145,
+    },
+    fieldLineCount: 6,
+    fieldLineLength: 4.6,
+    fieldLineSpacing: 0.34,
+    wirePosition3D: [0, 0, 0],
+  },
   status: {
     screenCapture: 'idle',
     camera: 'idle',
@@ -83,6 +103,22 @@ export const experimentDataActions = {
       latestVisionValues: {},
       ocrComparisonResults: {},
       status: { ...current.status, warnings: [] },
+    }));
+  },
+  updateMagneticFieldDetection(result: MagneticFieldDetectionResult) {
+    setState((current) => ({
+      ...current,
+      latestMagneticFieldDetection: result,
+    }));
+    pushWarning(result.warning);
+  },
+  updateMagneticFieldConfig(config: Partial<MagneticFieldConfig>) {
+    setState((current) => ({
+      ...current,
+      magneticFieldConfig: {
+        ...current.magneticFieldConfig,
+        ...config,
+      },
     }));
   },
   setScreenRois(rois: RoiConfig[]) {

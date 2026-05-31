@@ -2,9 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useExperimentDataStore } from '../store/useExperimentDataStore';
+import { experimentDataActions } from '../store/useExperimentDataStore';
 import type { PhysicsSample } from '../types/physics';
+import type { MagneticFieldConfig, MagneticFieldDetectionResult } from '../types/vision';
 import { createDashedLine, createForceArrowGroup, createTextSprite, disposeObject3D } from './ForceArrow3D';
 import { ForceCompositionController } from './ForceCompositionController';
+import { createMagneticFieldLinesGroup } from './MagneticFieldLines3D';
 
 export type CompositionState = 'idle' | 'compose12' | 'compose123' | 'result';
 
@@ -23,6 +26,7 @@ const AXIS_COLOR = '#aeb8c4';
 
 export function ForceVisualization3D() {
   const store = useExperimentDataStore();
+  const { latestMagneticFieldDetection, magneticFieldConfig } = store;
   const latestForces = useMemo(() => readTesseractForces(store.latestScreenValues), [store.latestScreenValues]);
   const waitingChannels = useMemo(() => getWaitingChannels(store.latestScreenValues), [store.latestScreenValues]);
   const [displayForces, setDisplayForces] = useState<ForceTriplet | null>(latestForces);
@@ -116,6 +120,8 @@ export function ForceVisualization3D() {
           showResultOnly={showResultOnly}
           compositionState={compositionState}
           animationProgress={animationProgress}
+          magneticDetection={latestMagneticFieldDetection}
+          magneticFieldConfig={magneticFieldConfig}
         />
         <div className="force-scene-overlay">
           <div>
@@ -145,9 +151,12 @@ export function ForceVisualization3D() {
         animationRunning={animationRunning}
         compositionState={compositionState}
         scaleFactor={scaleFactor}
+        showFieldLines={magneticFieldConfig.showFieldLines}
+        magneticStatusText={getMagneticStatusText(latestMagneticFieldDetection, magneticFieldConfig.showFieldLines)}
         onTogglePause={handleTogglePause}
         onCompose={handleCompose}
         onToggleResultOnly={handleToggleResultOnly}
+        onToggleFieldLines={() => experimentDataActions.updateMagneticFieldConfig({ showFieldLines: !magneticFieldConfig.showFieldLines })}
       />
     </section>
   );
@@ -159,9 +168,19 @@ interface ForceSceneCanvasProps {
   showResultOnly: boolean;
   compositionState: CompositionState;
   animationProgress: number;
+  magneticDetection?: MagneticFieldDetectionResult;
+  magneticFieldConfig: MagneticFieldConfig;
 }
 
-function ForceSceneCanvas({ forces, scaleFactor, showResultOnly, compositionState, animationProgress }: ForceSceneCanvasProps) {
+function ForceSceneCanvas({
+  forces,
+  scaleFactor,
+  showResultOnly,
+  compositionState,
+  animationProgress,
+  magneticDetection,
+  magneticFieldConfig,
+}: ForceSceneCanvasProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -255,11 +274,15 @@ function ForceSceneCanvas({ forces, scaleFactor, showResultOnly, compositionStat
     disposeObject3D(dynamicGroup);
     dynamicGroup.clear();
 
+    if (magneticFieldConfig.showFieldLines) {
+      dynamicGroup.add(createMagneticFieldLinesGroup(magneticDetection, magneticFieldConfig));
+    }
+
     if (forces) {
       const forceGroup = createForceSceneGroup(forces, scaleFactor, showResultOnly, compositionState, animationProgress);
       dynamicGroup.add(forceGroup);
     }
-  }, [animationProgress, compositionState, forces, scaleFactor, showResultOnly]);
+  }, [animationProgress, compositionState, forces, magneticDetection, magneticFieldConfig, scaleFactor, showResultOnly]);
 
   return <div ref={mountRef} className="force-three-canvas" aria-label="三力立体图示与合成演示模块" />;
 }
@@ -391,6 +414,15 @@ function readTesseractForces(latestValues: Record<string, PhysicsSample>): Force
     f3: f3.value,
     timestamp: Math.max(f1.timestamp, f2.timestamp, f3.timestamp),
   };
+}
+
+function getMagneticStatusText(
+  detection: MagneticFieldDetectionResult | undefined,
+  showFieldLines: boolean,
+) {
+  if (!showFieldLines) return '隐藏';
+  if (detection?.nPole && detection.sPole) return 'N → S 已识别';
+  return '默认方向';
 }
 
 function getWaitingChannels(latestValues: Record<string, PhysicsSample>) {

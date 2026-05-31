@@ -57,3 +57,50 @@ export interface VisionAnalyzeResult {
 export interface VisionAnalyzer {
   analyze(imageData: ImageData, roiConfig: VisionRoiConfig): Promise<VisionAnalyzeResult>;
 }
+
+export type MagnetPoleType = 'N' | 'S';
+
+export interface ColorMarkerDetection {
+  type: MagnetPoleType;
+  x: number;
+  y: number;
+  radius?: number;
+  area?: number;
+  confidence: number;
+  color: 'red' | 'blue';
+  detectedAt: number;
+}
+
+export interface MagneticFieldDetectionResult {
+  nPole?: ColorMarkerDetection;
+  sPole?: ColorMarkerDetection;
+  fieldDirection2D?: {
+    x: number;
+    y: number;
+  };
+  confidence: number;
+  warning?: string;
+  timestamp: number;
+  frameWidth?: number;
+  frameHeight?: number;
+}
+
+export interface MagneticFieldConfig {
+  enabled: boolean;
+  showFieldLines: boolean;
+  detectionEnabled: boolean;
+  redThreshold: {
+    rMin: number;
+    gMax: number;
+    bMax: number;
+  };
+  blueThreshold: {
+    bMin: number;
+    rMax: number;
+    gMax: number;
+  };
+  fieldLineCount: number;
+  fieldLineLength: number;
+  fieldLineSpacing: number;
+  wirePosition3D: [number, number, number];
+}

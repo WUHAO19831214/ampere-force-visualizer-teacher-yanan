@@ -1,6 +1,6 @@
 import type { PhysicsSample } from './physics';
 import type { RecognizerMethod, OcrDebugInfo, OcrMethodTestResult, RoiConfig } from './physics';
-import type { VisionSample } from './vision';
+import type { MagneticFieldConfig, MagneticFieldDetectionResult, VisionSample } from './vision';
 
 export type DataSourceType = 'screen-roi' | 'camera-vision';
 
@@ -12,6 +12,8 @@ export interface ExperimentDataStore {
   screenRois: RoiConfig[];
   selectedScreenRoiId?: string;
   ocrComparisonResults: Record<string, Partial<Record<RecognizerMethod, OcrMethodTestResult>>>;
+  latestMagneticFieldDetection?: MagneticFieldDetectionResult;
+  magneticFieldConfig: MagneticFieldConfig;
 }
 
 export interface RuntimeStatus {

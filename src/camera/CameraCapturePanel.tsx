@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import type { VisionAnalyzer, VisionRoiConfig } from '../types/vision';
 import { listVideoInputDevices, downloadCanvasAsPng } from '../utils/cameraUtils';
 import { cropRoiFromVideo } from '../utils/imagePreprocess';
@@ -8,6 +8,7 @@ import { ColorTrackingAnalyzer } from '../vision/ColorTrackingAnalyzer';
 import { TemplateMatchingAnalyzer } from '../vision/TemplateMatchingAnalyzer';
 import { MarkerTrackingAnalyzer } from '../vision/MarkerTrackingAnalyzer';
 import { OpticalFlowAnalyzer } from '../vision/OpticalFlowAnalyzer';
+import { MagneticFieldMarkerDetector } from '../vision/MagneticFieldMarkerDetector';
 import { CameraOverlay } from './CameraOverlay';
 import { VisionConfigPanel } from './VisionConfigPanel';
 
@@ -34,13 +35,14 @@ function blankImageData() {
 
 export function CameraCapturePanel() {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const magneticFrameCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [deviceId, setDeviceId] = useState<string>('');
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [visionRois, setVisionRois] = useState(defaultVisionRois);
   const [selectedId, setSelectedId] = useState(defaultVisionRois[0].id);
-  const { latestVisionValues } = useExperimentDataStore();
+  const { latestVisionValues, latestMagneticFieldDetection, magneticFieldConfig } = useExperimentDataStore();
 
   const analyzers = useMemo<Record<string, VisionAnalyzer>>(
     () => ({
@@ -52,6 +54,7 @@ export function CameraCapturePanel() {
     }),
     [],
   );
+  const magneticDetector = useMemo(() => new MagneticFieldMarkerDetector(), []);
 
   useEffect(() => {
     listVideoInputDevices().then(setDevices).catch(() => setDevices([]));
@@ -152,6 +155,22 @@ export function CameraCapturePanel() {
     return () => window.clearInterval(interval);
   }, [isCameraOn, visionRois, analyzers]);
 
+  useEffect(() => {
+    if (!isCameraOn || !magneticFieldConfig.enabled || !magneticFieldConfig.detectionEnabled) return;
+    const interval = window.setInterval(() => {
+      const video = videoRef.current;
+      if (!video || !video.videoWidth || !video.videoHeight) return;
+      try {
+        const imageData = captureVideoFrame(video, magneticFrameCanvasRef);
+        const result = magneticDetector.detect(imageData, magneticFieldConfig);
+        experimentDataActions.updateMagneticFieldDetection(result);
+      } catch (error) {
+        experimentDataActions.pushWarning(error instanceof Error ? error.message : '磁场方向识别失败');
+      }
+    }, 200);
+    return () => window.clearInterval(interval);
+  }, [isCameraOn, magneticDetector, magneticFieldConfig]);
+
   const updateRoi = (next: VisionRoiConfig) =>
     setVisionRois((current) => current.map((roi) => (roi.id === next.id ? next : roi)));
 
@@ -221,6 +240,7 @@ export function CameraCapturePanel() {
         <CameraOverlay
           rois={visionRois}
           latestValues={latestVisionValues}
+          magneticDetection={latestMagneticFieldDetection}
           selectedId={selectedId}
           onSelect={setSelectedId}
           onChange={updateRoi}
@@ -230,6 +250,64 @@ export function CameraCapturePanel() {
         <summary>摄像头视觉 ROI 配置</summary>
         <VisionConfigPanel roi={selectedRoi} onChange={updateRoi} />
       </details>
+      <details className="config-drawer">
+        <summary>磁场识别设置</summary>
+        <MagneticFieldConfigPanel />
+      </details>
     </section>
+  );
+}
+
+function captureVideoFrame(video: HTMLVideoElement, canvasRef: MutableRefObject<HTMLCanvasElement | null>) {
+  const canvas = canvasRef.current ?? document.createElement('canvas');
+  canvasRef.current = canvas;
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) throw new Error('无法创建磁场识别画布');
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  return context.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+function MagneticFieldConfigPanel() {
+  const { magneticFieldConfig, latestMagneticFieldDetection } = useExperimentDataStore();
+  const update = (next: Partial<typeof magneticFieldConfig>) => experimentDataActions.updateMagneticFieldConfig(next);
+
+  return (
+    <div className="config-grid magnetic-config-grid">
+      <label className="check-row">
+        <input
+          type="checkbox"
+          checked={magneticFieldConfig.detectionEnabled}
+          onChange={(event) => update({ detectionEnabled: event.target.checked })}
+        />
+        启用磁极颜色识别
+      </label>
+      <label className="check-row">
+        <input
+          type="checkbox"
+          checked={magneticFieldConfig.showFieldLines}
+          onChange={(event) => update({ showFieldLines: event.target.checked })}
+        />
+        显示磁感线
+      </label>
+      <label>
+        磁感线数量
+        <input
+          type="number"
+          min={2}
+          max={12}
+          value={magneticFieldConfig.fieldLineCount}
+          onChange={(event) => update({ fieldLineCount: Number(event.target.value) })}
+        />
+      </label>
+      <label>
+        识别状态
+        <output>
+          N：{latestMagneticFieldDetection?.nPole ? '已识别' : '未识别'} / S：
+          {latestMagneticFieldDetection?.sPole ? '已识别' : '未识别'}
+        </output>
+      </label>
+    </div>
   );
 }

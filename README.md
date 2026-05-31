@@ -60,12 +60,14 @@ http://localhost:5173
 - 摄像头视觉 ROI 支持拖拽、缩放、启用/停用和配置。
 - 摄像头视觉分析接口：mock、color-tracking、template-matching、marker-tracking、optical-flow。
 - 当前 mock 视觉分析会模拟目标坐标、位移、速度、角度、角速度。
+- 摄像头画面支持红色 N 极与蓝色 S 极颜色标记识别，并在 Overlay 中显示 N、S 和 B 方向箭头。
 - 右侧实时显示屏幕数字数据、摄像头视觉数据、状态、FPS、分辨率和 warning。
 - 支持导出屏幕数据 CSV。
 - 支持导出摄像头数据 CSV。
 - 右侧下方已替换为 Three.js 三力立体图示与合成演示模块。
 - 三维模块读取 Tesseract 实时识别得到的 F1、F2、F3，并按统一比例尺绘制三个正交分力。
 - 三维模块支持暂停/开始、三力合成动画和仅显示合力。
+- 三维模块可显示/隐藏约 6 条匀强磁场磁感线，方向来自摄像头识别的 N → S。
 
 ## 如何使用
 
@@ -92,6 +94,18 @@ http://localhost:5173
 ### 调整摄像头视觉 ROI
 
 点击“添加视觉分析区域”可新增视觉 ROI。拖动 ROI 框可移动，拖动右下角小柄可缩放。展开“摄像头视觉 ROI 配置”后，可以修改名称、分析方法和启用状态。
+
+### 磁场方向识别
+
+摄像头区域会按固定频率从当前视频帧识别颜色标记：
+
+- 红色标记代表 N 极；
+- 蓝色标记代表 S 极；
+- 磁场方向按磁体外部约定从 N 指向 S。
+
+识别到 N、S 后，摄像头画面 Overlay 会显示红色 N 圆圈、蓝色 S 圆圈，以及 `B: N → S` 的方向箭头。展开“磁场识别设置”可以启用/关闭磁极颜色识别、显示/隐藏磁感线，并调整磁感线数量。
+
+当前第一版使用 RGB 阈值和最大连通区域识别，适合先用红/蓝贴纸或色块做课堂校准。后续可以升级为 HSV 阈值、自适应光照或相机标定。
 
 ### 调整布局
 
@@ -138,6 +152,9 @@ http://localhost:5173
 - “暂停 / 开始”：只暂停或恢复右下角三维图示，不停止 OCR 采集；
 - “三力合成”：锁定当前一帧 F1、F2、F3，先演示 F1 与 F2 合成得到 F12，再演示 F12 与 F3 合成得到最终合力 F；
 - “仅显示合力”：只保留坐标轴、横杆、受力点和最终合力 F。
+- “显示 / 隐藏磁感线”：在三维图示中叠加或关闭匀强磁场磁感线。若尚未识别到 N/S，三维区会使用默认磁场方向。
+
+磁感线方向按实验空间映射：摄像头画面视为 3D 场景的 YZ 平面，画面向右映射到 +Z，画面向上映射到 +Y。导体棒保持沿 X 轴放置，因此识别到的 N → S 磁场方向始终位于 YZ 平面内。后续可以加入相机标定，进一步提高真实实验空间转换精度。
 
 ## 如何比较 OCR 方案
 
@@ -270,6 +287,7 @@ src/
     ForceVisualization3D.tsx
     ForceArrow3D.tsx
     ForceCompositionController.tsx
+    MagneticFieldLines3D.ts
     ThreeDVisualizationPanel.tsx
   recognizers/
     NumberRecognizer.ts
@@ -283,6 +301,7 @@ src/
     TemplateMatchingAnalyzer.ts
     MarkerTrackingAnalyzer.ts
     OpticalFlowAnalyzer.ts
+    MagneticFieldMarkerDetector.ts
   utils/
     imagePreprocess.ts
     extractNumber.ts

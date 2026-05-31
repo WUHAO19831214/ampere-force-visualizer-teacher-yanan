@@ -8,9 +8,12 @@ interface ForceCompositionControllerProps {
   animationRunning: boolean;
   compositionState: CompositionState;
   scaleFactor: number;
+  showFieldLines: boolean;
+  magneticStatusText: string;
   onTogglePause: () => void;
   onCompose: () => void;
   onToggleResultOnly: () => void;
+  onToggleFieldLines: () => void;
 }
 
 export function ForceCompositionController({
@@ -21,9 +24,12 @@ export function ForceCompositionController({
   animationRunning,
   compositionState,
   scaleFactor,
+  showFieldLines,
+  magneticStatusText,
   onTogglePause,
   onCompose,
   onToggleResultOnly,
+  onToggleFieldLines,
 }: ForceCompositionControllerProps) {
   const f12 = forces ? Math.sqrt(forces.f1 ** 2 + forces.f2 ** 2) : 0;
   const resultant = forces ? Math.sqrt(forces.f1 ** 2 + forces.f2 ** 2 + forces.f3 ** 2) : 0;
@@ -37,6 +43,7 @@ export function ForceCompositionController({
           <span>F12 = {forces ? `${f12.toFixed(2)} N` : '-'}</span>
           <span>F = {forces ? `${resultant.toFixed(2)} N` : '-'}</span>
           <span>状态：{getStateLabel(compositionState, animationRunning, showResultOnly)}</span>
+          <span>磁场：{magneticStatusText}</span>
         </div>
         {waitingChannels.length > 0 && <p>等待 OCR 数据：{waitingChannels.join('、')}</p>}
       </div>
@@ -47,6 +54,9 @@ export function ForceCompositionController({
         </button>
         <button className={showResultOnly ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleResultOnly} disabled={!forces}>
           {showResultOnly ? '退出仅显示合力' : '仅显示合力'}
+        </button>
+        <button className={showFieldLines ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleFieldLines}>
+          {showFieldLines ? '隐藏磁感线' : '显示磁感线'}
         </button>
       </div>
     </div>

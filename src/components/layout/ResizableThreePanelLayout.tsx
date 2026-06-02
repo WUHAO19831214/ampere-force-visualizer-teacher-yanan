@@ -10,6 +10,7 @@ interface ResizableThreePanelLayoutProps {
 
 export function ResizableThreePanelLayout({ left, middle, rightTop, rightBottom }: ResizableThreePanelLayoutProps) {
   const [layout, setLayout] = useState(() => loadLayoutRatios());
+  const [isRightPanelFullscreen, setIsRightPanelFullscreen] = useState(false);
 
   useEffect(() => {
     saveLayoutRatios(layout);
@@ -56,8 +57,8 @@ export function ResizableThreePanelLayout({ left, middle, rightTop, rightBottom 
       const top = ((moveEvent.clientY - rect.top) / rect.height) * 100;
       setLayout((current) => ({
         ...current,
-        rightTop: Math.min(70, Math.max(32, top)),
-        rightBottom: 100 - Math.min(70, Math.max(32, top)),
+        rightTop: Math.min(70, Math.max(12, top)),
+        rightBottom: 100 - Math.min(70, Math.max(12, top)),
       }));
     };
     const cleanup = () => {
@@ -69,6 +70,7 @@ export function ResizableThreePanelLayout({ left, middle, rightTop, rightBottom 
   };
 
   const resetLayout = () => setLayout(DEFAULT_LAYOUT);
+  const toggleLeftPanel = () => setLayout((current) => ({ ...current, leftCollapsed: !current.leftCollapsed }));
 
   return (
     <main className="app-shell">
@@ -81,26 +83,63 @@ export function ResizableThreePanelLayout({ left, middle, rightTop, rightBottom 
           重置布局
         </button>
       </div>
-      <section className="three-panel-layout">
-        <div className="layout-panel" style={{ width: `${layout.left}%` }}>
-          {left}
-        </div>
+      <section className={`three-panel-layout ${isRightPanelFullscreen ? 'right-panel-fullscreen-layout' : ''}`}>
+        {!isRightPanelFullscreen && !layout.leftCollapsed && (
+          <>
+            <div className="layout-panel left-layout-panel" style={{ width: `${layout.left}%` }}>
+              {left}
+              <button
+                className="left-panel-collapse-toggle"
+                onClick={toggleLeftPanel}
+                aria-label="收起屏幕 ROI 数字读取区"
+                title="收起屏幕 ROI 数字读取区"
+              >
+                ‹
+              </button>
+            </div>
+            <div
+              className="panel-resizer panel-resizer-x"
+              onPointerDown={(event) => startHorizontalDrag('left-middle', event)}
+              role="separator"
+              aria-label="调整左侧与中间宽度"
+            />
+          </>
+        )}
+        {!isRightPanelFullscreen && layout.leftCollapsed && (
+          <div className="left-panel-collapsed-rail">
+            <button
+              className="left-panel-expand-toggle"
+              onClick={toggleLeftPanel}
+              aria-label="展开屏幕 ROI 数字读取区"
+              title="展开屏幕 ROI 数字读取区"
+            >
+              ›
+            </button>
+          </div>
+        )}
+        {!isRightPanelFullscreen && (
+          <>
+            <div className={`layout-panel ${layout.leftCollapsed ? 'balanced-layout-panel' : ''}`} style={layout.leftCollapsed ? undefined : { width: `${layout.middle}%` }}>
+              {middle}
+            </div>
+            <div
+              className="panel-resizer panel-resizer-x"
+              onPointerDown={(event) => startHorizontalDrag('middle-right', event)}
+              role="separator"
+              aria-label="调整中间与右侧宽度"
+            />
+          </>
+        )}
         <div
-          className="panel-resizer panel-resizer-x"
-          onPointerDown={(event) => startHorizontalDrag('left-middle', event)}
-          role="separator"
-          aria-label="调整左侧与中间宽度"
-        />
-        <div className="layout-panel" style={{ width: `${layout.middle}%` }}>
-          {middle}
-        </div>
-        <div
-          className="panel-resizer panel-resizer-x"
-          onPointerDown={(event) => startHorizontalDrag('middle-right', event)}
-          role="separator"
-          aria-label="调整中间与右侧宽度"
-        />
-        <div className="layout-panel right-panel" style={{ width: `${layout.right}%` }}>
+          className={`layout-panel right-panel ${layout.leftCollapsed && !isRightPanelFullscreen ? 'balanced-layout-panel' : ''} ${isRightPanelFullscreen ? 'right-panel-fullscreen-active' : ''}`}
+          style={isRightPanelFullscreen || layout.leftCollapsed ? undefined : { width: `${layout.right}%` }}
+        >
+          <button
+            className="right-fullscreen-toggle secondary-button"
+            onClick={() => setIsRightPanelFullscreen((current) => !current)}
+          >
+            {isRightPanelFullscreen ? '恢复布局' : '全屏展示'}
+          </button>
           <div className="right-top" style={{ height: `${layout.rightTop}%` }}>
             {rightTop}
           </div>

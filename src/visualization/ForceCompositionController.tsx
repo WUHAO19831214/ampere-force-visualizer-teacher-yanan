@@ -1,10 +1,18 @@
 import type { CompositionState, ForceScaleMode, ForceTriplet } from './ForceVisualization3D';
+import { PhysicsSymbol, toUnicodePhysicsSymbol } from '../components/PhysicsSymbol';
 
 interface ForceCompositionControllerProps {
   forces: ForceTriplet | null;
   waitingChannels: string[];
   isHoldingFrame: boolean;
   showResultOnly: boolean;
+  showResultant: boolean;
+  showMagneticForce: boolean;
+  showMagneticAngle: boolean;
+  magneticAngleText: string | null;
+  showCurrentAngle: boolean;
+  currentAngleText: string | null;
+  currentDirectionSign: 1 | -1;
   animationRunning: boolean;
   compositionState: CompositionState;
   scaleFactor: number;
@@ -21,6 +29,11 @@ interface ForceCompositionControllerProps {
   onTogglePause: () => void;
   onCompose: () => void;
   onToggleResultOnly: () => void;
+  onToggleResultant: () => void;
+  onToggleMagneticForce: () => void;
+  onToggleMagneticForceAngle: () => void;
+  onToggleCurrentMagneticForceAngle: () => void;
+  onToggleCurrentDirection: () => void;
   onToggleFieldLines: () => void;
   onScaleModeChange: (mode: ForceScaleMode) => void;
   onManualScaleChange: (scale: number) => void;
@@ -34,6 +47,13 @@ export function ForceCompositionController({
   waitingChannels,
   isHoldingFrame,
   showResultOnly,
+  showResultant,
+  showMagneticForce,
+  showMagneticAngle,
+  magneticAngleText,
+  showCurrentAngle,
+  currentAngleText,
+  currentDirectionSign,
   animationRunning,
   compositionState,
   scaleFactor,
@@ -50,6 +70,11 @@ export function ForceCompositionController({
   onTogglePause,
   onCompose,
   onToggleResultOnly,
+  onToggleResultant,
+  onToggleMagneticForce,
+  onToggleMagneticForceAngle,
+  onToggleCurrentMagneticForceAngle,
+  onToggleCurrentDirection,
   onToggleFieldLines,
   onScaleModeChange,
   onManualScaleChange,
@@ -63,29 +88,82 @@ export function ForceCompositionController({
   return (
     <div className="force-control-panel">
       <div className="force-control-summary">
-        <h2>三力立体图示与合成演示</h2>
         <div className="force-summary-grid">
           <span>比例尺：1 N = {scaleFactor.toFixed(2)} 图示单位</span>
           <span>模式：{getScaleModeLabel(forceScaleMode)}</span>
-          <span>F12 = {forces ? `${f12.toFixed(2)} N` : '-'}</span>
-          <span>F = {forces ? `${resultant.toFixed(2)} N` : '-'}</span>
+          <span>
+            <PhysicsSymbol symbol="F12" /> = {forces ? `${f12.toFixed(2)} N` : '-'}
+          </span>
+          <span>
+            <PhysicsSymbol symbol="F" /> = {forces ? `${resultant.toFixed(2)} N` : '-'}
+          </span>
           <span>状态：{getStateLabel(compositionState, animationRunning, showResultOnly)}</span>
           <span>磁场：{magneticStatusText}</span>
         </div>
-        {waitingChannels.length > 0 && <p>等待 OCR 数据：{waitingChannels.join('、')}</p>}
+        {waitingChannels.length > 0 && (
+          <p>
+            等待 OCR 数据：
+            {waitingChannels.map((channel, index) => (
+              <span key={channel}>
+                {index > 0 && '、'}
+                <PhysicsSymbol symbol={channel} />
+              </span>
+            ))}
+          </p>
+        )}
         {hasMinVisibleAmplification && <p>小于最小可见长度的非零力已放大显示，仅用于方向观察。</p>}
       </div>
       <div className="force-control-buttons">
-        <button onClick={onTogglePause}>{isHoldingFrame ? '开始' : '暂停'}</button>
+        <button className={isHoldingFrame ? 'secondary-button is-active' : undefined} onClick={onTogglePause}>
+          {isHoldingFrame ? '开始' : '暂停'}
+        </button>
         <button onClick={onCompose} disabled={!forces || animationRunning}>
           三力合成
         </button>
         <button className={showResultOnly ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleResultOnly} disabled={!forces}>
-          {showResultOnly ? '退出仅显示合力' : '仅显示合力'}
+          {showResultOnly ? '退出仅合力' : '仅合力'}
+        </button>
+        <button className={!showResultant ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleResultant} disabled={!forces}>
+          {showResultant ? '隐藏合力' : '显示合力'}
         </button>
         <button className={showFieldLines ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleFieldLines}>
-          {showFieldLines ? '隐藏磁感线' : '显示磁感线'}
+          {showFieldLines ? '隐藏磁感线' : '磁感线'}
         </button>
+        <button className={showMagneticForce ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleMagneticForce}>
+          {showMagneticForce ? '隐藏' : ''}
+          <PhysicsSymbol symbol="F" />磁场力
+        </button>
+        <button className="secondary-button" onClick={onToggleCurrentDirection}>
+          <PhysicsSymbol symbol="I" />：{currentDirectionSign === 1 ? '+x' : '-x'}
+        </button>
+        <div className="magnetic-angle-action">
+          <button className={showMagneticAngle ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleMagneticForceAngle}>
+            {showMagneticAngle ? (
+              <>
+                隐藏<PhysicsSymbol symbol="B" />-<PhysicsSymbol symbol="F" />角
+              </>
+            ) : (
+              <>
+                <PhysicsSymbol symbol="B" />-<PhysicsSymbol symbol="F" />夹角
+              </>
+            )}
+          </button>
+          {magneticAngleText && <output className="magnetic-angle-result">{magneticAngleText}</output>}
+        </div>
+        <div className="magnetic-angle-action">
+          <button className={showCurrentAngle ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleCurrentMagneticForceAngle}>
+            {showCurrentAngle ? (
+              <>
+                隐藏<PhysicsSymbol symbol="I" />-<PhysicsSymbol symbol="F" />角
+              </>
+            ) : (
+              <>
+                <PhysicsSymbol symbol="I" />-<PhysicsSymbol symbol="F" />夹角
+              </>
+            )}
+          </button>
+          {currentAngleText && <output className="magnetic-angle-result">{currentAngleText}</output>}
+        </div>
       </div>
       <details className="force-scale-settings">
         <summary>力图示比例尺</summary>
@@ -135,7 +213,11 @@ export function ForceCompositionController({
 
 function getStateLabel(state: CompositionState, animationRunning: boolean, showResultOnly: boolean) {
   if (showResultOnly) return '仅显示合力';
-  if (animationRunning) return state === 'compose12' ? '正在合成 F1 + F2' : '正在合成 F12 + F3';
+  if (animationRunning) {
+    return state === 'compose12'
+      ? `正在合成 ${toUnicodePhysicsSymbol('F1')} + ${toUnicodePhysicsSymbol('F2')}`
+      : `正在合成 ${toUnicodePhysicsSymbol('F12')} + ${toUnicodePhysicsSymbol('F3')}`;
+  }
   if (state === 'result') return '合成结果';
   return '实时三力图示';
 }

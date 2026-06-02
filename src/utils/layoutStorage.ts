@@ -4,16 +4,18 @@ export interface LayoutRatios {
   right: number;
   rightTop: number;
   rightBottom: number;
+  leftCollapsed: boolean;
 }
 
-const STORAGE_KEY = 'physics-bridge-layout-ratios';
+const STORAGE_KEY = 'physics-bridge-layout-ratios-v2';
 
 export const DEFAULT_LAYOUT: LayoutRatios = {
   left: 28,
   middle: 34,
   right: 38,
-  rightTop: 48,
-  rightBottom: 52,
+  rightTop: 13,
+  rightBottom: 87,
+  leftCollapsed: false,
 };
 
 export function loadLayoutRatios(): LayoutRatios {

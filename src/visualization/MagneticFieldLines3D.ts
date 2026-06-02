@@ -42,7 +42,7 @@ export function createMagneticFieldLinesGroup(
   return group;
 }
 
-function getMagneticFieldDirection3D(detection?: MagneticFieldDetectionResult) {
+export function getMagneticFieldDirection3D(detection?: MagneticFieldDetectionResult) {
   if (detection?.nPole && detection.sPole) {
     return new THREE.Vector3(...mapCameraFieldDirectionTo3D(detection.nPole, detection.sPole));
   }
@@ -62,9 +62,9 @@ export function mapCameraFieldDirectionTo3D(
   const dx = sPole.x - nPole.x;
   const dy = sPole.y - nPole.y;
 
-  // 实验约定：摄像头画面平面被视为 3D 场景的 YZ 平面。
-  // 屏幕向上对应 +Y，屏幕向右对应 +Z，导体棒沿 X 轴。
-  // 因此 N→S 磁场方向只能映射到 YZ 平面内：B = [0, -dy, dx]。
+  // Three.js 渲染层中，摄像头画面平面仍对应 scene YZ 平面。
+  // 课堂标签约定为：scene Y（竖直向上）标作 z，scene Z（水平横向）标作 y。
+  // 导体棒沿 x 轴，N→S 磁场方向仍映射为 [0, -dy, dx]，不改变既有磁感线旋转逻辑。
   return normalizeMagneticDirection3D(0, -dy, dx).toArray() as [number, number, number];
 }
 
@@ -80,7 +80,7 @@ function addWireMarker(group: THREE.Group, position: THREE.Vector3) {
     new THREE.MeshStandardMaterial({ color: WIRE_COLOR, roughness: 0.45, metalness: 0.1 }),
   );
   wire.position.copy(position);
-  wire.rotation.x = Math.PI / 2;
+  wire.rotation.z = Math.PI / 2;
   group.add(wire);
 
   const label = createTextSprite('导线 I', '#dbeafe');

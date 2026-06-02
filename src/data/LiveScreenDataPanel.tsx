@@ -1,5 +1,6 @@
 import type { PhysicsSample } from '../types/physics';
 import type { RuntimeStatus } from '../types/experiment';
+import { PhysicsSymbol } from '../components/PhysicsSymbol';
 
 interface LiveScreenDataPanelProps {
   latestValues: Record<string, PhysicsSample>;
@@ -26,30 +27,22 @@ export function LiveScreenDataPanel({ latestValues, roiStatuses = {} }: LiveScre
 
   return (
     <section className="data-section classroom-screen-data">
-      <h3>屏幕 ROI 数字识别数据</h3>
       <div className="live-grid">
         {values.length === 0 && <div className="compact-empty">等待屏幕 ROI 数据。</div>}
-        {values.map(({ status, sample }) => {
-          const methodText =
-            status.method === 'cnn-onnx'
-              ? 'cnn-onnx 未接入'
-              : status.method === 'template-digit'
-                ? 'template-digit 预留'
-                : status.method;
-          return (
-            <article className="live-value-card" key={status.symbol}>
-              <span>{status.name}</span>
-              <strong>{sample ? `${sample.symbol} = ${sample.displayValue ?? sample.value} ${sample.unit}` : '等待 OCR'}</strong>
-              <div className="live-meta">
-                <span>来源：{methodText}</span>
-                {sample?.rawText && <span>rawText：{sample.rawText}</span>}
-                {sample?.confidence !== undefined && <span>置信度：{sample.confidence.toFixed(3)}</span>}
-                {sample?.durationMs !== undefined && <span>耗时：{sample.durationMs} ms</span>}
-                {!sample && <span>请确认屏幕捕获和 ROI 设置</span>}
-              </div>
-            </article>
-          );
-        })}
+        {values.map(({ status, sample }) => (
+          <article className="live-value-card" key={status.symbol}>
+            <strong className="physics-reading">
+              {sample ? (
+                <>
+                  <PhysicsSymbol symbol={sample.symbol} /> = {sample.displayValue ?? sample.value} {sample.unit}
+                </>
+              ) : (
+                '等待 OCR'
+              )}
+            </strong>
+            {!sample && <small>请确认屏幕捕获和 ROI 设置</small>}
+          </article>
+        ))}
       </div>
     </section>
   );

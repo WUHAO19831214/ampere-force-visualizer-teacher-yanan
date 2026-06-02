@@ -174,22 +174,6 @@ export function CameraCapturePanel() {
   const updateRoi = (next: VisionRoiConfig) =>
     setVisionRois((current) => current.map((roi) => (roi.id === next.id ? next : roi)));
 
-  const addVisionRoi = () => {
-    const index = visionRois.length + 1;
-    const next: VisionRoiConfig = {
-      id: `vision-${crypto.randomUUID()}`,
-      name: `视觉区域 ${index}`,
-      x: 0.18,
-      y: 0.18,
-      width: 0.28,
-      height: 0.22,
-      analyzerMethod: 'mock',
-      enabled: true,
-    };
-    setVisionRois((current) => [...current, next]);
-    setSelectedId(next.id);
-  };
-
   const snapshot = () => {
     const video = videoRef.current;
     if (!video || !video.videoWidth) return;
@@ -205,7 +189,6 @@ export function CameraCapturePanel() {
       <div className="panel-titlebar">
         <div>
           <h2>摄像头真实实验场景区</h2>
-          <p>实时观察实验，预留视觉分析接口</p>
         </div>
       </div>
       <div className="toolbar">
@@ -226,8 +209,6 @@ export function CameraCapturePanel() {
         <button onClick={snapshot} disabled={!isCameraOn}>
           截取当前画面
         </button>
-        <button onClick={addVisionRoi}>添加视觉分析区域</button>
-        <button onClick={() => setVisionRois([])}>清空视觉分析区域</button>
       </div>
       <div className="media-stage">
         <video ref={videoRef} className="capture-video camera-video" muted playsInline />

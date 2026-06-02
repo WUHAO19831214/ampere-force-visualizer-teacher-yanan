@@ -1,4 +1,5 @@
 import type { Rect, RoiConfig } from '../types/physics';
+import { PhysicsSymbol } from '../components/PhysicsSymbol';
 
 interface RoiBoxProps {
   roi: RoiConfig;
@@ -185,9 +186,11 @@ export function RoiBox({ roi, latestValue, statusText, selected, showOcrRoi, onS
         onPointerDown={startDrag}
       >
         <div className="roi-label">
-          <strong>{roi.name}</strong>
+          <strong>
+            <PhysicsSymbol symbol={roi.name} />
+          </strong>
           <span>
-            {roi.symbol} / {roi.unit}
+            <PhysicsSymbol symbol={roi.symbol} /> / {roi.unit}
           </span>
           <b>{latestValue ?? '-'}</b>
           <small>{statusText}</small>

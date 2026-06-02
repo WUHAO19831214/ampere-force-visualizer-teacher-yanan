@@ -5,9 +5,10 @@ import { useExperimentDataStore } from '../store/useExperimentDataStore';
 import { experimentDataActions } from '../store/useExperimentDataStore';
 import type { PhysicsSample } from '../types/physics';
 import type { MagneticFieldConfig, MagneticFieldDetectionResult } from '../types/vision';
+import { PhysicsSymbol, toUnicodePhysicsSymbol } from '../components/PhysicsSymbol';
 import { createDashedLine, createForceArrowGroup, createTextSprite, disposeObject3D } from './ForceArrow3D';
 import { ForceCompositionController } from './ForceCompositionController';
-import { createMagneticFieldLinesGroup } from './MagneticFieldLines3D';
+import { createMagneticFieldLinesGroup, getMagneticFieldDirection3D } from './MagneticFieldLines3D';
 
 export type CompositionState = 'idle' | 'compose12' | 'compose123' | 'result';
 export type ForceScaleMode = 'auto' | 'manual' | 'locked';
@@ -22,6 +23,8 @@ export interface ForceTriplet {
 const COMPONENT_COLOR = '#36d4cb';
 const F12_COLOR = '#f6a72f';
 const RESULT_COLOR = '#ff5c45';
+const MAGNETIC_FORCE_COLOR = '#a78bfa';
+const CURRENT_COLOR = '#facc15';
 const HELPER_COLOR = '#d9e2ec';
 const AXIS_COLOR = '#aeb8c4';
 const DEFAULT_MANUAL_FORCE_SCALE = 5;
@@ -41,6 +44,11 @@ export function ForceVisualization3D() {
   const [animationForces, setAnimationForces] = useState<ForceTriplet | null>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [showResultOnly, setShowResultOnly] = useState(false);
+  const [showResultant, setShowResultant] = useState(true);
+  const [showMagneticForce, setShowMagneticForce] = useState(false);
+  const [showMagneticAngle, setShowMagneticAngle] = useState(false);
+  const [showCurrentAngle, setShowCurrentAngle] = useState(false);
+  const [currentDirectionSign, setCurrentDirectionSign] = useState<1 | -1>(1);
   const [animationRunning, setAnimationRunning] = useState(false);
   const [compositionState, setCompositionState] = useState<CompositionState>('idle');
   const [animationProgress, setAnimationProgress] = useState(0);
@@ -99,6 +107,12 @@ export function ForceVisualization3D() {
   const maxForce = getMaxForceMagnitude(activeForces);
   const maxArrowLength = maxForce * scaleFactor;
   const hasMinVisibleAmplification = shouldApplyMinimumVisibleLength(activeForces, scaleFactor, MIN_VISIBLE_ARROW_LENGTH);
+  const magneticAngleText = showMagneticAngle
+    ? getMagneticForceAngleText(activeForces, latestMagneticFieldDetection)
+    : null;
+  const currentAngleText = showCurrentAngle
+    ? getCurrentMagneticForceAngleText(activeForces, currentDirectionSign)
+    : null;
 
   useEffect(() => {
     if (forceScaleMode !== 'auto' || isPaused || animationForces || !latestForces) return;
@@ -148,12 +162,40 @@ export function ForceVisualization3D() {
   };
 
   const handleToggleResultOnly = () => {
-    setShowResultOnly((current) => !current);
+    setShowResultOnly((current) => {
+      if (!current) setShowResultant(true);
+      return !current;
+    });
     setAnimationRunning(false);
     if (animationForces) {
       setCompositionState('result');
       setAnimationProgress(1);
     }
+  };
+
+  const handleToggleResultant = () => {
+    setShowResultant((current) => !current);
+  };
+
+  const handleToggleMagneticForce = () => {
+    if (!activeForces) return;
+    setShowMagneticForce((current) => !current);
+  };
+
+  const handleToggleMagneticForceAngle = () => {
+    setShowMagneticAngle((current) => {
+      const next = !current;
+      if (next && activeForces) setShowMagneticForce(true);
+      return next;
+    });
+  };
+
+  const handleToggleCurrentMagneticForceAngle = () => {
+    setShowCurrentAngle((current) => !current);
+  };
+
+  const handleToggleCurrentDirection = () => {
+    setCurrentDirectionSign((current) => (current === 1 ? -1 : 1));
   };
 
   const handleScaleModeChange = (mode: ForceScaleMode) => {
@@ -197,29 +239,45 @@ export function ForceVisualization3D() {
           forces={activeForces}
           scaleFactor={scaleFactor}
           showResultOnly={showResultOnly}
+          showResultant={showResultant}
+          showMagneticForce={showMagneticForce}
           compositionState={compositionState}
           animationProgress={animationProgress}
           minVisibleArrowLength={MIN_VISIBLE_ARROW_LENGTH}
           magneticDetection={latestMagneticFieldDetection}
           magneticFieldConfig={magneticFieldConfig}
+          currentDirectionSign={currentDirectionSign}
         />
         <div className="force-scene-overlay">
           <div>
-            <h2>三力立体图示</h2>
-            <p>F1 沿 X 轴，F2 沿 Y 轴，F3 沿 Z 轴，长度按同一比例尺绘制。</p>
+            <h2>立体图示</h2>
+            <p>
+              导体棒沿 <PhysicsSymbol symbol="x" /> 轴；水平垂直方向为 <PhysicsSymbol symbol="y" />；竖直向上为{' '}
+              <PhysicsSymbol symbol="z" />。<PhysicsSymbol symbol="F1" />、<PhysicsSymbol symbol="F2" />、
+              <PhysicsSymbol symbol="F3" /> 长度按同一比例尺绘制。
+            </p>
           </div>
           {activeForces && (
             <div className="force-readout">
-              <span>F1 {activeForces.f1.toFixed(2)} N</span>
-              <span>F2 {activeForces.f2.toFixed(2)} N</span>
-              <span>F3 {activeForces.f3.toFixed(2)} N</span>
+              <span>
+                <PhysicsSymbol symbol="F1" /> {activeForces.f1.toFixed(2)} N
+              </span>
+              <span>
+                <PhysicsSymbol symbol="F2" /> {activeForces.f2.toFixed(2)} N
+              </span>
+              <span>
+                <PhysicsSymbol symbol="F3" /> {activeForces.f3.toFixed(2)} N
+              </span>
             </div>
           )}
         </div>
         {!activeForces && (
           <div className="force-waiting">
             <strong>等待 OCR 数据</strong>
-            <span>请确认 F1、F2、F3 已由 Tesseract 实时识别。</span>
+            <span>
+              请确认 <PhysicsSymbol symbol="F1" />、<PhysicsSymbol symbol="F2" />、<PhysicsSymbol symbol="F3" /> 已由 Tesseract
+              实时识别。
+            </span>
           </div>
         )}
       </div>
@@ -228,6 +286,13 @@ export function ForceVisualization3D() {
         waitingChannels={waitingChannels}
         isHoldingFrame={isHoldingFrame}
         showResultOnly={showResultOnly}
+        showResultant={showResultant}
+        showMagneticForce={showMagneticForce}
+        showMagneticAngle={showMagneticAngle}
+        magneticAngleText={magneticAngleText}
+        showCurrentAngle={showCurrentAngle}
+        currentAngleText={currentAngleText}
+        currentDirectionSign={currentDirectionSign}
         animationRunning={animationRunning}
         compositionState={compositionState}
         scaleFactor={scaleFactor}
@@ -244,6 +309,11 @@ export function ForceVisualization3D() {
         onTogglePause={handleTogglePause}
         onCompose={handleCompose}
         onToggleResultOnly={handleToggleResultOnly}
+        onToggleResultant={handleToggleResultant}
+        onToggleMagneticForce={handleToggleMagneticForce}
+        onToggleMagneticForceAngle={handleToggleMagneticForceAngle}
+        onToggleCurrentMagneticForceAngle={handleToggleCurrentMagneticForceAngle}
+        onToggleCurrentDirection={handleToggleCurrentDirection}
         onToggleFieldLines={() => experimentDataActions.updateMagneticFieldConfig({ showFieldLines: !magneticFieldConfig.showFieldLines })}
         onScaleModeChange={handleScaleModeChange}
         onManualScaleChange={handleManualScaleChange}
@@ -259,22 +329,28 @@ interface ForceSceneCanvasProps {
   forces: ForceTriplet | null;
   scaleFactor: number;
   showResultOnly: boolean;
+  showResultant: boolean;
+  showMagneticForce: boolean;
   compositionState: CompositionState;
   animationProgress: number;
   minVisibleArrowLength: number;
   magneticDetection?: MagneticFieldDetectionResult;
   magneticFieldConfig: MagneticFieldConfig;
+  currentDirectionSign: 1 | -1;
 }
 
 function ForceSceneCanvas({
   forces,
   scaleFactor,
   showResultOnly,
+  showResultant,
+  showMagneticForce,
   compositionState,
   animationProgress,
   minVisibleArrowLength,
   magneticDetection,
   magneticFieldConfig,
+  currentDirectionSign,
 }: ForceSceneCanvasProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -290,7 +366,7 @@ function ForceSceneCanvas({
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#111a23');
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
-    camera.position.set(4.5, 3.1, 5.3);
+    camera.position.set(-7, 3.5, 2.8);
     camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -373,20 +449,24 @@ function ForceSceneCanvas({
       dynamicGroup.add(createMagneticFieldLinesGroup(magneticDetection, magneticFieldConfig));
     }
 
+    dynamicGroup.add(createCurrentArrowGroup(currentDirectionSign));
+
     if (forces) {
       const forceGroup = createForceSceneGroup(
         forces,
         scaleFactor,
         minVisibleArrowLength,
         showResultOnly,
+        showResultant,
+        showMagneticForce,
         compositionState,
         animationProgress,
       );
       dynamicGroup.add(forceGroup);
     }
-  }, [animationProgress, compositionState, forces, magneticDetection, magneticFieldConfig, minVisibleArrowLength, scaleFactor, showResultOnly]);
+  }, [animationProgress, compositionState, currentDirectionSign, forces, magneticDetection, magneticFieldConfig, minVisibleArrowLength, scaleFactor, showMagneticForce, showResultant, showResultOnly]);
 
-  return <div ref={mountRef} className="force-three-canvas" aria-label="三力立体图示与合成演示模块" />;
+  return <div ref={mountRef} className="force-three-canvas" aria-label="立体图示与合成演示模块" />;
 }
 
 function createStaticScene() {
@@ -398,8 +478,8 @@ function createStaticScene() {
   group.add(grid);
 
   group.add(createAxis('X', new THREE.Vector3(2.85, 0, 0), AXIS_COLOR, new THREE.Vector3(0.16, 0.08, 0)));
-  group.add(createAxis('Y', new THREE.Vector3(0, 2.45, 0), AXIS_COLOR, new THREE.Vector3(0.12, 0.08, 0)));
-  group.add(createAxis('Z', new THREE.Vector3(0, 0, 2.45), AXIS_COLOR, new THREE.Vector3(0.14, 0.1, 0.12)));
+  group.add(createAxis('Z', new THREE.Vector3(0, 2.45, 0), AXIS_COLOR, new THREE.Vector3(0.12, 0.08, 0)));
+  group.add(createAxis('Y', new THREE.Vector3(0, 0, 2.45), AXIS_COLOR, new THREE.Vector3(0.14, 0.1, 0.12)));
 
   const rod = new THREE.Mesh(
     new THREE.CylinderGeometry(0.045, 0.045, 4.7, 24),
@@ -447,16 +527,14 @@ function createForceSceneGroup(
   scaleFactor: number,
   minVisibleArrowLength: number,
   showResultOnly: boolean,
+  showResultant: boolean,
+  showMagneticForce: boolean,
   compositionState: CompositionState,
   animationProgress: number,
 ) {
   const group = new THREE.Group();
   const origin = new THREE.Vector3(0, 0, 0);
-  const v1 = new THREE.Vector3(forces.f1 * scaleFactor, 0, 0);
-  const v2 = new THREE.Vector3(0, forces.f2 * scaleFactor, 0);
-  const v3 = new THREE.Vector3(0, 0, forces.f3 * scaleFactor);
-  const v12 = v1.clone().add(v2);
-  const vF = v12.clone().add(v3);
+  const { v1, v2, v3, v12, resultant: vF } = createSceneForceVectors(forces, scaleFactor);
   const visibleV1 = applyMinimumVisibleLength(v1, minVisibleArrowLength);
   const visibleV2 = applyMinimumVisibleLength(v2, minVisibleArrowLength);
   const visibleV3 = applyMinimumVisibleLength(v3, minVisibleArrowLength);
@@ -468,20 +546,25 @@ function createForceSceneGroup(
   const fMagnitude = Math.sqrt(forces.f1 ** 2 + forces.f2 ** 2 + forces.f3 ** 2);
 
   if (showResultOnly) {
-    group.add(createForceArrowGroup({ label: 'F', valueN: fMagnitude, vector: visibleVF, color: RESULT_COLOR, origin, labelOffset: new THREE.Vector3(0.14, 0.2, 0.14) }));
+    if (showResultant) {
+      group.add(createForceArrowGroup({ label: 'F', valueN: fMagnitude, vector: visibleVF, color: RESULT_COLOR, origin, labelOffset: new THREE.Vector3(0.14, 0.2, 0.14) }));
+    }
+    if (showMagneticForce) {
+      group.add(createMagneticForceArrow(origin, visibleVF, fMagnitude));
+    }
     return group;
   }
 
-  group.add(createForceArrowGroup({ label: 'F1', valueN: forces.f1, vector: visibleV1, color: COMPONENT_COLOR, origin, labelOffset: new THREE.Vector3(0.08, 0.18, 0) }));
-  group.add(createForceArrowGroup({ label: 'F2', valueN: forces.f2, vector: visibleV2, color: COMPONENT_COLOR, origin, labelOffset: new THREE.Vector3(0.2, 0.08, 0) }));
-  group.add(createForceArrowGroup({ label: 'F3', valueN: forces.f3, vector: visibleV3, color: COMPONENT_COLOR, origin, labelOffset: new THREE.Vector3(0.16, 0.18, 0.08) }));
+  group.add(createForceArrowGroup({ label: toUnicodePhysicsSymbol('F1'), valueN: forces.f1, vector: visibleV1, color: COMPONENT_COLOR, origin, labelOffset: new THREE.Vector3(0.08, 0.18, 0) }));
+  group.add(createForceArrowGroup({ label: toUnicodePhysicsSymbol('F2'), valueN: forces.f2, vector: visibleV2, color: COMPONENT_COLOR, origin, labelOffset: new THREE.Vector3(0.2, 0.08, 0) }));
+  group.add(createForceArrowGroup({ label: toUnicodePhysicsSymbol('F3'), valueN: forces.f3, vector: visibleV3, color: COMPONENT_COLOR, origin, labelOffset: new THREE.Vector3(0.16, 0.18, 0.08) }));
 
   if (compositionState !== 'idle') {
     group.add(createDashedLine(v1, v12, HELPER_COLOR, 0.45));
     group.add(createDashedLine(v2, v12, HELPER_COLOR, 0.45));
     group.add(
       createForceArrowGroup({
-        label: 'F12',
+        label: toUnicodePhysicsSymbol('F12'),
         valueN: f12Magnitude,
         vector: visibleV12.clone().multiplyScalar(progress12),
         color: F12_COLOR,
@@ -495,7 +578,7 @@ function createForceSceneGroup(
   if (compositionState === 'compose123' || compositionState === 'result') {
     group.add(createDashedLine(v12, vF, HELPER_COLOR, 0.42));
     group.add(createDashedLine(v3, vF, HELPER_COLOR, 0.42));
-    group.add(
+    if (showResultant) group.add(
       createForceArrowGroup({
         label: 'F',
         valueN: fMagnitude,
@@ -508,7 +591,82 @@ function createForceSceneGroup(
     );
   }
 
+  if (showMagneticForce) {
+    if (showResultant && (compositionState === 'idle' || compositionState === 'compose12')) {
+      group.add(createForceArrowGroup({ label: 'F', valueN: fMagnitude, vector: visibleVF, color: RESULT_COLOR, origin, labelOffset: new THREE.Vector3(0.14, 0.24, 0.14) }));
+    }
+    group.add(createMagneticForceArrow(origin, visibleVF, fMagnitude));
+  }
+
   return group;
+}
+
+function createSceneForceVectors(forces: ForceTriplet, scaleFactor: number) {
+  // 课堂坐标：导体棒沿 x；水平垂直于导体棒为 y；竖直向上为 z。
+  // Three.js 的 scene Y 是竖直方向，scene Z 是水平横向，因此这里只做渲染层映射。
+  const v1 = new THREE.Vector3(forces.f1 * scaleFactor, 0, 0);
+  const v2 = new THREE.Vector3(0, 0, forces.f2 * scaleFactor);
+  const v3 = new THREE.Vector3(0, forces.f3 * scaleFactor, 0);
+  const v12 = v1.clone().add(v2);
+  return {
+    v1,
+    v2,
+    v3,
+    v12,
+    resultant: v12.clone().add(v3),
+  };
+}
+
+function createMagneticForceArrow(origin: THREE.Vector3, visibleResultant: THREE.Vector3, magnitudeN: number) {
+  return createForceArrowGroup({
+    label: 'F磁场力',
+    valueN: magnitudeN,
+    vector: visibleResultant.clone().multiplyScalar(-1),
+    color: MAGNETIC_FORCE_COLOR,
+    origin,
+    labelOffset: new THREE.Vector3(-0.18, 0.2, -0.14),
+  });
+}
+
+function createCurrentArrowGroup(currentDirectionSign: 1 | -1) {
+  const group = new THREE.Group();
+  const origin = new THREE.Vector3(currentDirectionSign === 1 ? -0.82 : 0.82, 0.16, 0);
+  const vector = new THREE.Vector3(currentDirectionSign * 1.25, 0, 0);
+  const arrow = new THREE.ArrowHelper(vector.clone().normalize(), origin, vector.length(), CURRENT_COLOR, 0.2, 0.12);
+  group.add(arrow);
+
+  const label = createTextSprite('I', CURRENT_COLOR);
+  label.scale.set(1.18, 0.34, 1);
+  label.position.copy(origin.clone().add(vector).add(new THREE.Vector3(0, 0.34, 0.14)));
+  group.add(label);
+  return group;
+}
+
+export function computeAngleBetweenVectors(a: [number, number, number], b: [number, number, number]) {
+  const vectorA = new THREE.Vector3(...a);
+  const vectorB = new THREE.Vector3(...b);
+  if (vectorA.length() < 0.0001 || vectorB.length() < 0.0001) return null;
+  const dot = clamp(vectorA.normalize().dot(vectorB.normalize()), -1, 1);
+  return (Math.acos(dot) * 180) / Math.PI;
+}
+
+function getMagneticForceAngleText(forces: ForceTriplet | null | undefined, detection?: MagneticFieldDetectionResult) {
+  if (!forces) return '∠(B, F磁场力) = --';
+  const resultant = createSceneForceVectors(forces, 1).resultant;
+  const magneticForce = resultant.clone().multiplyScalar(-1);
+  const magneticField = getMagneticFieldDirection3D(detection);
+  const angle = computeAngleBetweenVectors(magneticField.toArray(), magneticForce.toArray());
+  return angle === null ? '∠(B, F磁场力) = --' : `∠(B, F磁场力) = ${angle.toFixed(1)}°`;
+}
+
+function getCurrentMagneticForceAngleText(forces: ForceTriplet | null | undefined, currentDirectionSign: 1 | -1) {
+  if (!forces) return '无法计算 ∠(I, F磁场力)：缺少有效 F磁场力';
+  const resultant = createSceneForceVectors(forces, 1).resultant;
+  const magneticForce = resultant.clone().multiplyScalar(-1);
+  const angle = computeAngleBetweenVectors([currentDirectionSign, 0, 0], magneticForce.toArray());
+  return angle === null
+    ? '无法计算 ∠(I, F磁场力)：缺少有效 F磁场力'
+    : `∠(I, F磁场力) = ${angle.toFixed(1)}°`;
 }
 
 function readTesseractForces(latestValues: Record<string, PhysicsSample>): ForceTriplet | null {

@@ -75,7 +75,7 @@ export function createTextSprite(text: string, color: string | number, backgroun
       roundRect(context, 12, 18, width - 24, height - 36, 18);
       context.fill();
     }
-    context.font = '700 48px Arial, "Microsoft YaHei", sans-serif';
+    context.font = 'italic 700 48px "Times New Roman", "Microsoft YaHei", serif';
     context.textAlign = 'center';
     context.textBaseline = 'middle';
     context.lineJoin = 'round';

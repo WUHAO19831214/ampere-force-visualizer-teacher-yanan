@@ -1,5 +1,6 @@
 import type { OcrDebugInfo, RoiConfig } from '../types/physics';
 import type { TesseractRuntimeStatus } from '../recognizers/TesseractRecognizer';
+import { PhysicsSymbol } from '../components/PhysicsSymbol';
 
 interface OcrDebugPanelProps {
   rois: RoiConfig[];
@@ -53,7 +54,9 @@ export function OcrDebugPanel({ rois, debugByRoi, selectedId, tesseractStatus, i
           return (
             <article className={`ocr-debug-card ${selectedId === roi.id ? 'selected-debug-card' : ''}`} key={roi.id}>
               <div className="ocr-debug-head">
-                <strong>{roi.name}</strong>
+                <strong>
+                  <PhysicsSymbol symbol={roi.name} />
+                </strong>
                 <span>{debug?.method ?? roi.recognizerMethod}</span>
               </div>
               <p className="ocr-source-note">{sourceNote(roi, debug)}</p>

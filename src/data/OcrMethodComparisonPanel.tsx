@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { CnnOnnxRecognizer } from '../recognizers/CnnOnnxRecognizer';
+import { PhysicsSymbol } from '../components/PhysicsSymbol';
 import { MockRecognizer } from '../recognizers/MockRecognizer';
 import { TemplateDigitRecognizer } from '../recognizers/TemplateDigitRecognizer';
 import { TesseractRecognizer } from '../recognizers/TesseractRecognizer';
@@ -261,7 +262,9 @@ export function OcrMethodComparisonPanel() {
       <div className="comparison-head">
         <div>
           <h3>OCR 方案对比</h3>
-          <p>当前测试 ROI：{selectedRoi.name}</p>
+          <p>
+            当前测试 ROI：<PhysicsSymbol symbol={selectedRoi.name} />
+          </p>
         </div>
         <div className="comparison-actions">
           <button onClick={testAllMethods} disabled={busyMethod !== null}>

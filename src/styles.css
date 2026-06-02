@@ -82,6 +82,7 @@ button:disabled {
 }
 
 .three-panel-layout {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -98,8 +99,78 @@ button:disabled {
 }
 
 .right-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
+}
+
+.right-panel-fullscreen-layout {
+  min-width: 0;
+}
+
+.right-panel-fullscreen-active {
+  flex: 1 1 100%;
+  width: 100%;
+}
+
+.right-fullscreen-toggle {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 12;
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 13px;
+  box-shadow: 0 2px 7px rgba(22, 42, 54, 0.12);
+}
+
+.right-panel .panel-titlebar {
+  padding-right: 118px;
+}
+
+.left-layout-panel {
+  position: relative;
+}
+
+.balanced-layout-panel {
+  flex: 1 1 0;
+  width: auto;
+}
+
+.left-panel-collapse-toggle,
+.left-panel-expand-toggle {
+  position: absolute;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  min-height: 36px;
+  padding: 0;
+  border-color: #a9c5d1;
+  background: rgba(237, 247, 249, 0.94);
+  color: #176475;
+  font-family: Georgia, serif;
+  font-size: 24px;
+  line-height: 1;
+  box-shadow: 0 2px 7px rgba(22, 42, 54, 0.12);
+}
+
+.left-panel-collapse-toggle {
+  top: 11px;
+  right: 8px;
+}
+
+.left-panel-collapsed-rail {
+  flex: 0 0 34px;
+  display: flex;
+  justify-content: center;
+  padding-top: 11px;
+  border-right: 1px solid #d5dee6;
+  background: #f4f7f9;
+}
+
+.left-panel-expand-toggle {
+  position: static;
 }
 
 .panel-resizer,
@@ -355,7 +426,9 @@ button:disabled {
   paint-order: stroke;
   stroke: rgba(5, 10, 16, 0.76);
   stroke-width: 0.8;
+  font-family: "Times New Roman", Times, serif;
   font-size: 4px;
+  font-style: italic;
   font-weight: 700;
 }
 
@@ -783,7 +856,7 @@ button:disabled {
 
 .classroom-screen-data .live-value-card {
   gap: 7px;
-  min-height: 112px;
+  min-height: 82px;
 }
 
 .live-value-card span {
@@ -799,6 +872,24 @@ button:disabled {
 
 .classroom-screen-data .live-value-card strong {
   font-size: clamp(22px, 2.1vw, 30px);
+}
+
+.physics-reading .physics-symbol,
+.physics-reading .physics-symbol > span {
+  color: inherit;
+  font-size: inherit;
+}
+
+.physics-symbol {
+  font-family: "Times New Roman", Times, serif;
+  font-style: italic;
+  letter-spacing: 0;
+}
+
+.physics-symbol sub {
+  font-size: 0.68em;
+  line-height: 0;
+  vertical-align: -0.25em;
 }
 
 .live-value-card small {
@@ -1085,10 +1176,12 @@ button:disabled {
 
 .force-control-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 7px;
+  max-height: min(34%, 230px);
+  overflow-y: auto;
+  padding: 9px 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   background: #0b1118;
 }
@@ -1101,6 +1194,7 @@ button:disabled {
   margin: 0 0 6px;
   font-size: 16px;
   letter-spacing: 0;
+  white-space: normal;
 }
 
 .force-control-summary p {
@@ -1112,7 +1206,7 @@ button:disabled {
 .force-summary-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 12px;
+  gap: 5px 11px;
   color: #b5c4d2;
   font-size: 12px;
   line-height: 1.35;
@@ -1121,12 +1215,15 @@ button:disabled {
 .force-control-buttons {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 6px;
 }
 
 .force-control-buttons button {
-  min-height: 34px;
+  min-height: 29px;
+  padding: 4px 8px;
+  font-size: 13px;
   white-space: nowrap;
 }
 
@@ -1134,6 +1231,24 @@ button:disabled {
   border-color: #f0b24f;
   background: #fff7e6;
   color: #8a5400;
+}
+
+.magnetic-angle-action {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 9px;
+}
+
+.magnetic-angle-result {
+  color: #ddd6fe;
+  font-family: "Times New Roman", "Microsoft YaHei", serif;
+  font-size: 14px;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1.35;
+  text-shadow: 0 0 10px rgba(167, 139, 250, 0.34);
 }
 
 .force-scale-settings {

@@ -10,6 +10,7 @@ import { ForceCompositionController } from './ForceCompositionController';
 import { createMagneticFieldLinesGroup } from './MagneticFieldLines3D';
 
 export type CompositionState = 'idle' | 'compose12' | 'compose123' | 'result';
+export type ForceScaleMode = 'auto' | 'manual' | 'locked';
 
 export interface ForceTriplet {
   f1: number;
@@ -23,6 +24,12 @@ const F12_COLOR = '#f6a72f';
 const RESULT_COLOR = '#ff5c45';
 const HELPER_COLOR = '#d9e2ec';
 const AXIS_COLOR = '#aeb8c4';
+const DEFAULT_MANUAL_FORCE_SCALE = 5;
+const MIN_FORCE_SCALE = 0.2;
+const MAX_FORCE_SCALE = 30;
+const TARGET_MAX_ARROW_LENGTH = 3;
+const MIN_VISIBLE_ARROW_LENGTH = 0.25;
+const AUTO_SCALE_SMOOTHING_WEIGHT = 0.2;
 
 export function ForceVisualization3D() {
   const store = useExperimentDataStore();
@@ -37,6 +44,13 @@ export function ForceVisualization3D() {
   const [animationRunning, setAnimationRunning] = useState(false);
   const [compositionState, setCompositionState] = useState<CompositionState>('idle');
   const [animationProgress, setAnimationProgress] = useState(0);
+  const [forceScaleMode, setForceScaleMode] = useState<ForceScaleMode>('auto');
+  const [manualForceScale, setManualForceScale] = useState(DEFAULT_MANUAL_FORCE_SCALE);
+  const [autoForceScale, setAutoForceScale] = useState(DEFAULT_MANUAL_FORCE_SCALE);
+  const [lockedForceScale, setLockedForceScale] = useState<number | null>(null);
+  const [heldForceScale, setHeldForceScale] = useState<number | null>(null);
+  const [animationForceScale, setAnimationForceScale] = useState<number | null>(null);
+  const autoScaleInitializedRef = useRef(false);
 
   useEffect(() => {
     if (!isPaused && !animationForces && latestForces) {
@@ -74,14 +88,43 @@ export function ForceVisualization3D() {
   }, [animationRunning]);
 
   const activeForces = animationForces ?? (isPaused ? heldForces : displayForces ?? latestForces);
-  const scaleFactor = useMemo(() => calculateScaleFactor(activeForces), [activeForces]);
   const isHoldingFrame = isPaused || animationForces !== null;
+  const selectedForceScale =
+    forceScaleMode === 'manual'
+      ? manualForceScale
+      : forceScaleMode === 'locked'
+        ? lockedForceScale ?? autoForceScale
+        : autoForceScale;
+  const scaleFactor = animationForceScale ?? (isPaused ? heldForceScale ?? selectedForceScale : selectedForceScale);
+  const maxForce = getMaxForceMagnitude(activeForces);
+  const maxArrowLength = maxForce * scaleFactor;
+  const hasMinVisibleAmplification = shouldApplyMinimumVisibleLength(activeForces, scaleFactor, MIN_VISIBLE_ARROW_LENGTH);
+
+  useEffect(() => {
+    if (forceScaleMode !== 'auto' || isPaused || animationForces || !latestForces) return;
+    const targetScale = computeAutoForceScale(getForceMagnitudes(latestForces));
+    setAutoForceScale((currentScale) => {
+      if (!autoScaleInitializedRef.current) {
+        autoScaleInitializedRef.current = true;
+        return targetScale;
+      }
+      return currentScale * (1 - AUTO_SCALE_SMOOTHING_WEIGHT) + targetScale * AUTO_SCALE_SMOOTHING_WEIGHT;
+    });
+  }, [animationForces, forceScaleMode, isPaused, latestForces]);
+
+  useEffect(() => {
+    if (animationRunning || compositionState !== 'result' || isPaused || !animationForces) return;
+    setAnimationForces(null);
+    setAnimationForceScale(null);
+  }, [animationForces, animationRunning, compositionState, isPaused]);
 
   const handleTogglePause = () => {
     if (isHoldingFrame) {
       setIsPaused(false);
       setHeldForces(null);
       setAnimationForces(null);
+      setHeldForceScale(null);
+      setAnimationForceScale(null);
       setAnimationRunning(false);
       setCompositionState('idle');
       setAnimationProgress(0);
@@ -90,6 +133,7 @@ export function ForceVisualization3D() {
     }
     setIsPaused(true);
     setHeldForces(activeForces ?? latestForces ?? null);
+    setHeldForceScale(scaleFactor);
   };
 
   const handleCompose = () => {
@@ -97,6 +141,7 @@ export function ForceVisualization3D() {
     if (!baseForces) return;
     setShowResultOnly(false);
     setAnimationForces(baseForces);
+    setAnimationForceScale(scaleFactor);
     setAnimationProgress(0);
     setCompositionState('compose12');
     setAnimationRunning(true);
@@ -111,6 +156,40 @@ export function ForceVisualization3D() {
     }
   };
 
+  const handleScaleModeChange = (mode: ForceScaleMode) => {
+    if (mode === 'locked') {
+      setLockedForceScale(scaleFactor);
+    } else if (mode === 'auto') {
+      const targetScale = computeAutoForceScale(getForceMagnitudes(activeForces ?? latestForces));
+      autoScaleInitializedRef.current = true;
+      setAutoForceScale(targetScale);
+    }
+    setForceScaleMode(mode);
+  };
+
+  const handleManualScaleChange = (nextScale: number) => {
+    setManualForceScale(clamp(nextScale, MIN_FORCE_SCALE, MAX_FORCE_SCALE));
+  };
+
+  const handleAutoAdjustScale = () => {
+    autoScaleInitializedRef.current = true;
+    setAutoForceScale(computeAutoForceScale(getForceMagnitudes(activeForces ?? latestForces)));
+    setForceScaleMode('auto');
+  };
+
+  const handleLockScale = () => {
+    setLockedForceScale(scaleFactor);
+    setForceScaleMode('locked');
+  };
+
+  const handleResetScale = () => {
+    autoScaleInitializedRef.current = true;
+    setManualForceScale(DEFAULT_MANUAL_FORCE_SCALE);
+    setLockedForceScale(null);
+    setAutoForceScale(computeAutoForceScale(getForceMagnitudes(activeForces ?? latestForces)));
+    setForceScaleMode('auto');
+  };
+
   return (
     <section className="visualization-panel force-visualization-panel">
       <div className="force-scene-shell">
@@ -120,6 +199,7 @@ export function ForceVisualization3D() {
           showResultOnly={showResultOnly}
           compositionState={compositionState}
           animationProgress={animationProgress}
+          minVisibleArrowLength={MIN_VISIBLE_ARROW_LENGTH}
           magneticDetection={latestMagneticFieldDetection}
           magneticFieldConfig={magneticFieldConfig}
         />
@@ -151,12 +231,25 @@ export function ForceVisualization3D() {
         animationRunning={animationRunning}
         compositionState={compositionState}
         scaleFactor={scaleFactor}
+        forceScaleMode={forceScaleMode}
+        manualForceScale={manualForceScale}
+        minForceScale={MIN_FORCE_SCALE}
+        maxForceScale={MAX_FORCE_SCALE}
+        minVisibleArrowLength={MIN_VISIBLE_ARROW_LENGTH}
+        hasMinVisibleAmplification={hasMinVisibleAmplification}
+        maxForce={maxForce}
+        maxArrowLength={maxArrowLength}
         showFieldLines={magneticFieldConfig.showFieldLines}
         magneticStatusText={getMagneticStatusText(latestMagneticFieldDetection, magneticFieldConfig.showFieldLines)}
         onTogglePause={handleTogglePause}
         onCompose={handleCompose}
         onToggleResultOnly={handleToggleResultOnly}
         onToggleFieldLines={() => experimentDataActions.updateMagneticFieldConfig({ showFieldLines: !magneticFieldConfig.showFieldLines })}
+        onScaleModeChange={handleScaleModeChange}
+        onManualScaleChange={handleManualScaleChange}
+        onAutoAdjustScale={handleAutoAdjustScale}
+        onLockScale={handleLockScale}
+        onResetScale={handleResetScale}
       />
     </section>
   );
@@ -168,6 +261,7 @@ interface ForceSceneCanvasProps {
   showResultOnly: boolean;
   compositionState: CompositionState;
   animationProgress: number;
+  minVisibleArrowLength: number;
   magneticDetection?: MagneticFieldDetectionResult;
   magneticFieldConfig: MagneticFieldConfig;
 }
@@ -178,6 +272,7 @@ function ForceSceneCanvas({
   showResultOnly,
   compositionState,
   animationProgress,
+  minVisibleArrowLength,
   magneticDetection,
   magneticFieldConfig,
 }: ForceSceneCanvasProps) {
@@ -279,10 +374,17 @@ function ForceSceneCanvas({
     }
 
     if (forces) {
-      const forceGroup = createForceSceneGroup(forces, scaleFactor, showResultOnly, compositionState, animationProgress);
+      const forceGroup = createForceSceneGroup(
+        forces,
+        scaleFactor,
+        minVisibleArrowLength,
+        showResultOnly,
+        compositionState,
+        animationProgress,
+      );
       dynamicGroup.add(forceGroup);
     }
-  }, [animationProgress, compositionState, forces, magneticDetection, magneticFieldConfig, scaleFactor, showResultOnly]);
+  }, [animationProgress, compositionState, forces, magneticDetection, magneticFieldConfig, minVisibleArrowLength, scaleFactor, showResultOnly]);
 
   return <div ref={mountRef} className="force-three-canvas" aria-label="三力立体图示与合成演示模块" />;
 }
@@ -343,6 +445,7 @@ function setObjectOpacity(object: THREE.Object3D, opacity: number) {
 function createForceSceneGroup(
   forces: ForceTriplet,
   scaleFactor: number,
+  minVisibleArrowLength: number,
   showResultOnly: boolean,
   compositionState: CompositionState,
   animationProgress: number,
@@ -354,19 +457,24 @@ function createForceSceneGroup(
   const v3 = new THREE.Vector3(0, 0, forces.f3 * scaleFactor);
   const v12 = v1.clone().add(v2);
   const vF = v12.clone().add(v3);
+  const visibleV1 = applyMinimumVisibleLength(v1, minVisibleArrowLength);
+  const visibleV2 = applyMinimumVisibleLength(v2, minVisibleArrowLength);
+  const visibleV3 = applyMinimumVisibleLength(v3, minVisibleArrowLength);
+  const visibleV12 = applyMinimumVisibleLength(v12, minVisibleArrowLength);
+  const visibleVF = applyMinimumVisibleLength(vF, minVisibleArrowLength);
   const progress12 = getProgress12(compositionState, animationProgress);
   const progressF = getProgressF(compositionState, animationProgress);
   const f12Magnitude = Math.sqrt(forces.f1 ** 2 + forces.f2 ** 2);
   const fMagnitude = Math.sqrt(forces.f1 ** 2 + forces.f2 ** 2 + forces.f3 ** 2);
 
   if (showResultOnly) {
-    group.add(createForceArrowGroup({ label: 'F', valueN: fMagnitude, vector: vF, color: RESULT_COLOR, origin, labelOffset: new THREE.Vector3(0.14, 0.2, 0.14) }));
+    group.add(createForceArrowGroup({ label: 'F', valueN: fMagnitude, vector: visibleVF, color: RESULT_COLOR, origin, labelOffset: new THREE.Vector3(0.14, 0.2, 0.14) }));
     return group;
   }
 
-  group.add(createForceArrowGroup({ label: 'F1', valueN: forces.f1, vector: v1, color: COMPONENT_COLOR, origin, labelOffset: new THREE.Vector3(0.08, 0.18, 0) }));
-  group.add(createForceArrowGroup({ label: 'F2', valueN: forces.f2, vector: v2, color: COMPONENT_COLOR, origin, labelOffset: new THREE.Vector3(0.2, 0.08, 0) }));
-  group.add(createForceArrowGroup({ label: 'F3', valueN: forces.f3, vector: v3, color: COMPONENT_COLOR, origin, labelOffset: new THREE.Vector3(0.16, 0.18, 0.08) }));
+  group.add(createForceArrowGroup({ label: 'F1', valueN: forces.f1, vector: visibleV1, color: COMPONENT_COLOR, origin, labelOffset: new THREE.Vector3(0.08, 0.18, 0) }));
+  group.add(createForceArrowGroup({ label: 'F2', valueN: forces.f2, vector: visibleV2, color: COMPONENT_COLOR, origin, labelOffset: new THREE.Vector3(0.2, 0.08, 0) }));
+  group.add(createForceArrowGroup({ label: 'F3', valueN: forces.f3, vector: visibleV3, color: COMPONENT_COLOR, origin, labelOffset: new THREE.Vector3(0.16, 0.18, 0.08) }));
 
   if (compositionState !== 'idle') {
     group.add(createDashedLine(v1, v12, HELPER_COLOR, 0.45));
@@ -375,7 +483,7 @@ function createForceSceneGroup(
       createForceArrowGroup({
         label: 'F12',
         valueN: f12Magnitude,
-        vector: v12.clone().multiplyScalar(progress12),
+        vector: visibleV12.clone().multiplyScalar(progress12),
         color: F12_COLOR,
         origin,
         opacity: progress12 < 1 ? 0.9 : 1,
@@ -391,7 +499,7 @@ function createForceSceneGroup(
       createForceArrowGroup({
         label: 'F',
         valueN: fMagnitude,
-        vector: vF.clone().multiplyScalar(progressF),
+        vector: visibleVF.clone().multiplyScalar(progressF),
         color: RESULT_COLOR,
         origin,
         opacity: progressF < 1 ? 0.9 : 1,
@@ -438,17 +546,54 @@ function findTesseractSample(latestValues: Record<string, PhysicsSample>, channe
   );
 }
 
-function calculateScaleFactor(forces: ForceTriplet | null) {
-  if (!forces) return 0.5;
-  const maxMagnitude = Math.max(
-    Math.abs(forces.f1),
-    Math.abs(forces.f2),
-    Math.abs(forces.f3),
+export function computeAutoForceScale(
+  forces: number[],
+  options: {
+    minScale?: number;
+    maxScale?: number;
+    targetMaxArrowLength?: number;
+    lowForceFallbackScale?: number;
+  } = {},
+) {
+  const minScale = options.minScale ?? MIN_FORCE_SCALE;
+  const maxScale = options.maxScale ?? MAX_FORCE_SCALE;
+  const targetMaxArrowLength = options.targetMaxArrowLength ?? TARGET_MAX_ARROW_LENGTH;
+  const lowForceFallbackScale = options.lowForceFallbackScale ?? 20;
+  const maxForce = Math.max(...forces.map((force) => Math.abs(force)), 0);
+  if (maxForce < 0.05) return clamp(lowForceFallbackScale, minScale, maxScale);
+  return clamp(targetMaxArrowLength / maxForce, minScale, maxScale);
+}
+
+function getForceMagnitudes(forces: ForceTriplet | null) {
+  if (!forces) return [];
+  return [
+    forces.f1,
+    forces.f2,
+    forces.f3,
     Math.sqrt(forces.f1 ** 2 + forces.f2 ** 2),
     Math.sqrt(forces.f1 ** 2 + forces.f2 ** 2 + forces.f3 ** 2),
-    0.1,
-  );
-  return Math.min(0.72, Math.max(0.16, 2.45 / maxMagnitude));
+  ];
+}
+
+function getMaxForceMagnitude(forces: ForceTriplet | null) {
+  return Math.max(...getForceMagnitudes(forces).map((force) => Math.abs(force)), 0);
+}
+
+function applyMinimumVisibleLength(vector: THREE.Vector3, minVisibleArrowLength: number) {
+  const length = vector.length();
+  if (length < 0.0001 || length >= minVisibleArrowLength) return vector;
+  return vector.clone().setLength(minVisibleArrowLength);
+}
+
+function shouldApplyMinimumVisibleLength(forces: ForceTriplet | null, scaleFactor: number, minVisibleArrowLength: number) {
+  return getForceMagnitudes(forces).some((force) => {
+    const displayLength = Math.abs(force) * scaleFactor;
+    return Math.abs(force) > 0.0001 && displayLength < minVisibleArrowLength;
+  });
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function getProgress12(state: CompositionState, progress: number) {

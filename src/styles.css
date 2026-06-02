@@ -1084,9 +1084,9 @@ button:disabled {
 }
 
 .force-control-panel {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
@@ -1136,8 +1136,86 @@ button:disabled {
   color: #8a5400;
 }
 
+.force-scale-settings {
+  grid-column: 1 / -1;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 8px;
+}
+
+.force-scale-settings summary {
+  width: fit-content;
+  cursor: pointer;
+  color: #d9e5ee;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.force-scale-controls {
+  display: grid;
+  grid-template-columns: minmax(132px, 0.75fr) minmax(210px, 1.4fr) minmax(260px, 1.8fr) auto;
+  align-items: end;
+  gap: 10px;
+  padding-top: 9px;
+}
+
+.force-scale-controls label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: #b5c4d2;
+  font-size: 11px;
+}
+
+.force-scale-controls select {
+  min-height: 30px;
+  border: 1px solid rgba(185, 205, 220, 0.32);
+  border-radius: 5px;
+  background: #16222d;
+  color: #eef6fb;
+  padding: 4px 7px;
+}
+
+.force-scale-slider input {
+  width: 100%;
+  accent-color: #36d4cb;
+}
+
+.force-scale-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: #aebfcd;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.force-scale-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.force-scale-actions button {
+  min-height: 30px;
+  padding: 5px 8px;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
 .ghost-button {
   background: #ffffff;
+}
+
+@media (max-width: 1450px) {
+  .force-scale-controls {
+    grid-template-columns: minmax(132px, 0.8fr) minmax(190px, 1.3fr) minmax(240px, 1.7fr);
+  }
+
+  .force-scale-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 1050px) {

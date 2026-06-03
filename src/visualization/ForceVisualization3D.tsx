@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useExperimentDataStore } from '../store/useExperimentDataStore';
@@ -20,11 +21,50 @@ export interface ForceTriplet {
   timestamp: number;
 }
 
+export interface KeySnapshot {
+  id: string;
+  name: string;
+  source: 'manual' | 'auto';
+  imageDataUrl: string;
+  createdAt: number;
+  forces: {
+    f1: number;
+    f2: number;
+    f3: number;
+    fSensorMagnitude: number;
+    fMagneticMagnitude: number;
+  };
+  directions: {
+    currentDirection: [number, number, number];
+    magneticFieldDirection?: [number, number, number];
+    magneticForceDirection?: [number, number, number];
+  };
+  angles: {
+    angleBF?: number;
+    angleIF?: number;
+  };
+  perpendicularPassed: boolean;
+}
+
+export interface DirectionMetrics {
+  fSensorMagnitude: number;
+  fMagneticMagnitude: number;
+  currentDirection: [number, number, number];
+  magneticFieldDirection?: [number, number, number];
+  magneticForceDirection?: [number, number, number];
+  angleBF?: number;
+  angleIF?: number;
+  perpendicularPassed: boolean;
+  perpendicularMessage: string;
+}
+
 const COMPONENT_COLOR = '#36d4cb';
 const F12_COLOR = '#f6a72f';
 const RESULT_COLOR = '#ff5c45';
 const MAGNETIC_FORCE_COLOR = '#a78bfa';
 const CURRENT_COLOR = '#facc15';
+const IB_PLANE_COLOR = '#9fb7ff';
+const LEFT_HAND_COLOR = '#f7d6b5';
 const HELPER_COLOR = '#d9e2ec';
 const AXIS_COLOR = '#aeb8c4';
 const DEFAULT_MANUAL_FORCE_SCALE = 5;
@@ -33,6 +73,12 @@ const MAX_FORCE_SCALE = 30;
 const TARGET_MAX_ARROW_LENGTH = 3;
 const MIN_VISIBLE_ARROW_LENGTH = 0.25;
 const AUTO_SCALE_SMOOTHING_WEIGHT = 0.2;
+const PERPENDICULAR_TOLERANCE_DEG = 8;
+const MAX_KEY_SNAPSHOTS = 6;
+const FORCE_VISUALIZATION_SPLIT_STORAGE_KEY = 'physics-force-visualization-split-ratio';
+const DEFAULT_VISUALIZATION_SPLIT_RATIO = 0.68;
+const MIN_VISUALIZATION_SPLIT_RATIO = 0.45;
+const MAX_VISUALIZATION_SPLIT_RATIO = 0.82;
 
 export function ForceVisualization3D() {
   const store = useExperimentDataStore();
@@ -49,6 +95,13 @@ export function ForceVisualization3D() {
   const [showMagneticAngle, setShowMagneticAngle] = useState(false);
   const [showCurrentAngle, setShowCurrentAngle] = useState(false);
   const [currentDirectionSign, setCurrentDirectionSign] = useState<1 | -1>(1);
+  const [showIBPlane, setShowIBPlane] = useState(false);
+  const [showLeftHandRule, setShowLeftHandRule] = useState(false);
+  const [includeLeftHandRuleInSnapshot, setIncludeLeftHandRuleInSnapshot] = useState(false);
+  const [autoSnapshotEnabled, setAutoSnapshotEnabled] = useState(false);
+  const [keySnapshots, setKeySnapshots] = useState<KeySnapshot[]>([]);
+  const [selectedSnapshot, setSelectedSnapshot] = useState<KeySnapshot | null>(null);
+  const [showSixSnapshotGrid, setShowSixSnapshotGrid] = useState(false);
   const [animationRunning, setAnimationRunning] = useState(false);
   const [compositionState, setCompositionState] = useState<CompositionState>('idle');
   const [animationProgress, setAnimationProgress] = useState(0);
@@ -58,7 +111,12 @@ export function ForceVisualization3D() {
   const [lockedForceScale, setLockedForceScale] = useState<number | null>(null);
   const [heldForceScale, setHeldForceScale] = useState<number | null>(null);
   const [animationForceScale, setAnimationForceScale] = useState<number | null>(null);
+  const [visualizationSplitRatio, setVisualizationSplitRatio] = useState(readStoredVisualizationSplitRatio);
   const autoScaleInitializedRef = useRef(false);
+  const visualizationPanelRef = useRef<HTMLElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const lastAutoSnapshotAtRef = useRef(0);
+  const snapshotCountersRef = useRef({ manual: 0, auto: 0 });
 
   useEffect(() => {
     if (!isPaused && !animationForces && latestForces) {
@@ -113,6 +171,10 @@ export function ForceVisualization3D() {
   const currentAngleText = showCurrentAngle
     ? getCurrentMagneticForceAngleText(activeForces, currentDirectionSign)
     : null;
+  const directionMetrics = useMemo(
+    () => getDirectionMetrics(activeForces, latestMagneticFieldDetection, currentDirectionSign, PERPENDICULAR_TOLERANCE_DEG),
+    [activeForces, currentDirectionSign, latestMagneticFieldDetection],
+  );
 
   useEffect(() => {
     if (forceScaleMode !== 'auto' || isPaused || animationForces || !latestForces) return;
@@ -131,6 +193,16 @@ export function ForceVisualization3D() {
     setAnimationForces(null);
     setAnimationForceScale(null);
   }, [animationForces, animationRunning, compositionState, isPaused]);
+
+  useEffect(() => {
+    if (!autoSnapshotEnabled || !activeForces || !directionMetrics?.perpendicularPassed) return;
+    if (!directionMetrics.magneticFieldDirection || !directionMetrics.magneticForceDirection) return;
+    if (keySnapshots.length >= MAX_KEY_SNAPSHOTS) return;
+    const now = Date.now();
+    if (now - lastAutoSnapshotAtRef.current < 2000) return;
+    lastAutoSnapshotAtRef.current = now;
+    void captureKeySnapshot('auto');
+  }, [activeForces, autoSnapshotEnabled, directionMetrics, keySnapshots.length]);
 
   const handleTogglePause = () => {
     if (isHoldingFrame) {
@@ -198,6 +270,56 @@ export function ForceVisualization3D() {
     setCurrentDirectionSign((current) => (current === 1 ? -1 : 1));
   };
 
+  const captureKeySnapshot = async (source: 'manual' | 'auto') => {
+    if (!activeForces || !directionMetrics || !canvasRef.current) return;
+    const temporarilyShowLeftHandRule = includeLeftHandRuleInSnapshot && !showLeftHandRule;
+    if (includeLeftHandRuleInSnapshot && !showLeftHandRule) {
+      setShowLeftHandRule(true);
+      await waitForNextFrame();
+    }
+
+    const imageDataUrl = canvasRef.current.toDataURL('image/png');
+    if (temporarilyShowLeftHandRule) setShowLeftHandRule(false);
+    snapshotCountersRef.current[source] += 1;
+    const snapshot: KeySnapshot = {
+      id: `${source}-${Date.now()}`,
+      name: `${source === 'manual' ? '手动截图' : '自动截图'} ${snapshotCountersRef.current[source]}`,
+      source,
+      imageDataUrl,
+      createdAt: Date.now(),
+      forces: {
+        f1: activeForces.f1,
+        f2: activeForces.f2,
+        f3: activeForces.f3,
+        fSensorMagnitude: directionMetrics.fSensorMagnitude,
+        fMagneticMagnitude: directionMetrics.fMagneticMagnitude,
+      },
+      directions: {
+        currentDirection: directionMetrics.currentDirection,
+        magneticFieldDirection: directionMetrics.magneticFieldDirection,
+        magneticForceDirection: directionMetrics.magneticForceDirection,
+      },
+      angles: {
+        angleBF: directionMetrics.angleBF,
+        angleIF: directionMetrics.angleIF,
+      },
+      perpendicularPassed: directionMetrics.perpendicularPassed,
+    };
+
+    setKeySnapshots((current) => [...current, snapshot].slice(-MAX_KEY_SNAPSHOTS));
+  };
+
+  const handleManualSnapshot = () => {
+    void captureKeySnapshot('manual');
+  };
+
+  const handleClearSnapshots = () => {
+    setKeySnapshots([]);
+    setSelectedSnapshot(null);
+    setShowSixSnapshotGrid(false);
+    snapshotCountersRef.current = { manual: 0, auto: 0 };
+  };
+
   const handleScaleModeChange = (mode: ForceScaleMode) => {
     if (mode === 'locked') {
       setLockedForceScale(scaleFactor);
@@ -232,9 +354,34 @@ export function ForceVisualization3D() {
     setForceScaleMode('auto');
   };
 
+  const handleVisualizationSplitPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const panel = visualizationPanelRef.current;
+    if (!panel) return;
+    event.preventDefault();
+
+    const updateRatio = (clientY: number) => {
+      const rect = panel.getBoundingClientRect();
+      if (rect.height <= 0) return;
+      const nextRatio = clamp((clientY - rect.top) / rect.height, MIN_VISUALIZATION_SPLIT_RATIO, MAX_VISUALIZATION_SPLIT_RATIO);
+      setVisualizationSplitRatio(nextRatio);
+      window.localStorage.setItem(FORCE_VISUALIZATION_SPLIT_STORAGE_KEY, String(nextRatio));
+    };
+
+    updateRatio(event.clientY);
+    document.body.classList.add('is-force-split-resizing');
+    const handlePointerMove = (moveEvent: PointerEvent) => updateRatio(moveEvent.clientY);
+    const handlePointerUp = () => {
+      document.body.classList.remove('is-force-split-resizing');
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp, { once: true });
+  };
+
   return (
-    <section className="visualization-panel force-visualization-panel">
-      <div className="force-scene-shell">
+    <section className="visualization-panel force-visualization-panel" ref={visualizationPanelRef}>
+      <div className="force-scene-shell" style={{ flexBasis: `calc(${visualizationSplitRatio * 100}% - 4px)` }}>
         <ForceSceneCanvas
           forces={activeForces}
           scaleFactor={scaleFactor}
@@ -247,6 +394,11 @@ export function ForceVisualization3D() {
           magneticDetection={latestMagneticFieldDetection}
           magneticFieldConfig={magneticFieldConfig}
           currentDirectionSign={currentDirectionSign}
+          showIBPlane={showIBPlane}
+          showLeftHandRule={showLeftHandRule}
+          onCanvasReady={(canvas) => {
+            canvasRef.current = canvas;
+          }}
         />
         <div className="force-scene-overlay">
           <div>
@@ -281,47 +433,162 @@ export function ForceVisualization3D() {
           </div>
         )}
       </div>
-      <ForceCompositionController
-        forces={activeForces}
-        waitingChannels={waitingChannels}
-        isHoldingFrame={isHoldingFrame}
-        showResultOnly={showResultOnly}
-        showResultant={showResultant}
-        showMagneticForce={showMagneticForce}
-        showMagneticAngle={showMagneticAngle}
-        magneticAngleText={magneticAngleText}
-        showCurrentAngle={showCurrentAngle}
-        currentAngleText={currentAngleText}
-        currentDirectionSign={currentDirectionSign}
-        animationRunning={animationRunning}
-        compositionState={compositionState}
-        scaleFactor={scaleFactor}
-        forceScaleMode={forceScaleMode}
-        manualForceScale={manualForceScale}
-        minForceScale={MIN_FORCE_SCALE}
-        maxForceScale={MAX_FORCE_SCALE}
-        minVisibleArrowLength={MIN_VISIBLE_ARROW_LENGTH}
-        hasMinVisibleAmplification={hasMinVisibleAmplification}
-        maxForce={maxForce}
-        maxArrowLength={maxArrowLength}
-        showFieldLines={magneticFieldConfig.showFieldLines}
-        magneticStatusText={getMagneticStatusText(latestMagneticFieldDetection, magneticFieldConfig.showFieldLines)}
-        onTogglePause={handleTogglePause}
-        onCompose={handleCompose}
-        onToggleResultOnly={handleToggleResultOnly}
-        onToggleResultant={handleToggleResultant}
-        onToggleMagneticForce={handleToggleMagneticForce}
-        onToggleMagneticForceAngle={handleToggleMagneticForceAngle}
-        onToggleCurrentMagneticForceAngle={handleToggleCurrentMagneticForceAngle}
-        onToggleCurrentDirection={handleToggleCurrentDirection}
-        onToggleFieldLines={() => experimentDataActions.updateMagneticFieldConfig({ showFieldLines: !magneticFieldConfig.showFieldLines })}
-        onScaleModeChange={handleScaleModeChange}
-        onManualScaleChange={handleManualScaleChange}
-        onAutoAdjustScale={handleAutoAdjustScale}
-        onLockScale={handleLockScale}
-        onResetScale={handleResetScale}
+      <div
+        className="force-vertical-resizer"
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="调整 3D 图示与控制区高度"
+        title="拖动调整 3D 图示与控制区高度"
+        onPointerDown={handleVisualizationSplitPointerDown}
       />
+      <div className="force-control-region" style={{ flexBasis: `calc(${(1 - visualizationSplitRatio) * 100}% - 4px)` }}>
+        <ForceCompositionController
+          forces={activeForces}
+          waitingChannels={waitingChannels}
+          isHoldingFrame={isHoldingFrame}
+          showResultOnly={showResultOnly}
+          showResultant={showResultant}
+          showMagneticForce={showMagneticForce}
+          showMagneticAngle={showMagneticAngle}
+          magneticAngleText={magneticAngleText}
+          showCurrentAngle={showCurrentAngle}
+          currentAngleText={currentAngleText}
+          currentDirectionSign={currentDirectionSign}
+          showIBPlane={showIBPlane}
+          showLeftHandRule={showLeftHandRule}
+          includeLeftHandRuleInSnapshot={includeLeftHandRuleInSnapshot}
+          autoSnapshotEnabled={autoSnapshotEnabled}
+          keySnapshots={keySnapshots}
+          directionMetrics={directionMetrics}
+          perpendicularToleranceDeg={PERPENDICULAR_TOLERANCE_DEG}
+          animationRunning={animationRunning}
+          compositionState={compositionState}
+          scaleFactor={scaleFactor}
+          forceScaleMode={forceScaleMode}
+          manualForceScale={manualForceScale}
+          minForceScale={MIN_FORCE_SCALE}
+          maxForceScale={MAX_FORCE_SCALE}
+          minVisibleArrowLength={MIN_VISIBLE_ARROW_LENGTH}
+          hasMinVisibleAmplification={hasMinVisibleAmplification}
+          maxForce={maxForce}
+          maxArrowLength={maxArrowLength}
+          showFieldLines={magneticFieldConfig.showFieldLines}
+          magneticStatusText={getMagneticStatusText(latestMagneticFieldDetection, magneticFieldConfig.showFieldLines)}
+          onTogglePause={handleTogglePause}
+          onCompose={handleCompose}
+          onToggleResultOnly={handleToggleResultOnly}
+          onToggleResultant={handleToggleResultant}
+          onToggleMagneticForce={handleToggleMagneticForce}
+          onToggleMagneticForceAngle={handleToggleMagneticForceAngle}
+          onToggleCurrentMagneticForceAngle={handleToggleCurrentMagneticForceAngle}
+          onToggleCurrentDirection={handleToggleCurrentDirection}
+          onToggleIBPlane={() => setShowIBPlane((current) => !current)}
+          onToggleLeftHandRule={() => setShowLeftHandRule((current) => !current)}
+          onToggleIncludeLeftHandRule={() => setIncludeLeftHandRuleInSnapshot((current) => !current)}
+          onToggleAutoSnapshot={() => setAutoSnapshotEnabled((current) => !current)}
+          onManualSnapshot={handleManualSnapshot}
+          onShowSixSnapshotGrid={() => setShowSixSnapshotGrid(true)}
+          onSelectSnapshot={setSelectedSnapshot}
+          onClearSnapshots={handleClearSnapshots}
+          onToggleFieldLines={() => experimentDataActions.updateMagneticFieldConfig({ showFieldLines: !magneticFieldConfig.showFieldLines })}
+          onScaleModeChange={handleScaleModeChange}
+          onManualScaleChange={handleManualScaleChange}
+          onAutoAdjustScale={handleAutoAdjustScale}
+          onLockScale={handleLockScale}
+          onResetScale={handleResetScale}
+        />
+      </div>
+      {selectedSnapshot && <SnapshotModal snapshot={selectedSnapshot} onClose={() => setSelectedSnapshot(null)} />}
+      {showSixSnapshotGrid && <SixSnapshotGrid snapshots={keySnapshots} onClose={() => setShowSixSnapshotGrid(false)} />}
     </section>
+  );
+}
+
+function SnapshotModal({ snapshot, onClose }: { snapshot: KeySnapshot; onClose: () => void }) {
+  return (
+    <div className="snapshot-modal-backdrop" role="dialog" aria-modal="true" aria-label="关键图像记录详情">
+      <div className="snapshot-modal">
+        <div className="snapshot-modal-head">
+          <div>
+            <h3>{snapshot.name}</h3>
+            <span>{formatSnapshotTime(snapshot.createdAt)}</span>
+          </div>
+          <button type="button" onClick={onClose}>
+            关闭
+          </button>
+        </div>
+        <img src={snapshot.imageDataUrl} alt={snapshot.name} />
+        <SnapshotMetadata snapshot={snapshot} />
+      </div>
+    </div>
+  );
+}
+
+function SixSnapshotGrid({ snapshots, onClose }: { snapshots: KeySnapshot[]; onClose: () => void }) {
+  const visibleSnapshots = snapshots.slice(-MAX_KEY_SNAPSHOTS);
+  return (
+    <div className="snapshot-modal-backdrop" role="dialog" aria-modal="true" aria-label="六图展示">
+      <div className="six-snapshot-grid-modal">
+        <div className="snapshot-modal-head">
+          <div>
+            <h3>关键图像六图展示</h3>
+            <span>最多显示最近 6 张关键图像</span>
+          </div>
+          <button type="button" onClick={onClose}>
+            关闭
+          </button>
+        </div>
+        <div className="six-snapshot-grid">
+          {visibleSnapshots.length === 0 && <p className="snapshot-empty">暂无关键图像记录。</p>}
+          {visibleSnapshots.map((snapshot) => (
+            <figure key={snapshot.id}>
+              <img src={snapshot.imageDataUrl} alt={snapshot.name} />
+              <figcaption>
+                <strong>{snapshot.name}</strong>
+                <span>{formatSnapshotTime(snapshot.createdAt)}</span>
+                <span>
+                  B-F：{formatAngleValue(snapshot.angles.angleBF)} / I-F：{formatAngleValue(snapshot.angles.angleIF)}
+                </span>
+                <span>{snapshot.perpendicularPassed ? '垂直性判断：通过' : '垂直性判断：未满足'}</span>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SnapshotMetadata({ snapshot }: { snapshot: KeySnapshot }) {
+  return (
+    <dl className="snapshot-metadata">
+      <div>
+        <dt>来源</dt>
+        <dd>{snapshot.source === 'manual' ? '手动截图' : '自动截图'}</dd>
+      </div>
+      <div>
+        <dt>垂直性判断</dt>
+        <dd>{snapshot.perpendicularPassed ? '通过' : '未满足'}</dd>
+      </div>
+      <div>
+        <dt>F磁场力</dt>
+        <dd>{snapshot.forces.fMagneticMagnitude.toFixed(2)} N</dd>
+      </div>
+      <div>
+        <dt>∠(B, F磁场力)</dt>
+        <dd>{formatAngleValue(snapshot.angles.angleBF)}</dd>
+      </div>
+      <div>
+        <dt>∠(I, F磁场力)</dt>
+        <dd>{formatAngleValue(snapshot.angles.angleIF)}</dd>
+      </div>
+      <div>
+        <dt>F1 / F2 / F3</dt>
+        <dd>
+          {snapshot.forces.f1.toFixed(2)} / {snapshot.forces.f2.toFixed(2)} / {snapshot.forces.f3.toFixed(2)} N
+        </dd>
+      </div>
+    </dl>
   );
 }
 
@@ -337,6 +604,9 @@ interface ForceSceneCanvasProps {
   magneticDetection?: MagneticFieldDetectionResult;
   magneticFieldConfig: MagneticFieldConfig;
   currentDirectionSign: 1 | -1;
+  showIBPlane: boolean;
+  showLeftHandRule: boolean;
+  onCanvasReady?: (canvas: HTMLCanvasElement | null) => void;
 }
 
 function ForceSceneCanvas({
@@ -351,6 +621,9 @@ function ForceSceneCanvas({
   magneticDetection,
   magneticFieldConfig,
   currentDirectionSign,
+  showIBPlane,
+  showLeftHandRule,
+  onCanvasReady,
 }: ForceSceneCanvasProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -369,10 +642,11 @@ function ForceSceneCanvas({
     camera.position.set(-7, 3.5, 2.8);
     camera.lookAt(0, 0, 0);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     mount.appendChild(renderer.domElement);
+    onCanvasReady?.(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(0, 0.2, 0);
@@ -430,6 +704,7 @@ function ForceSceneCanvas({
       disposeObject3D(scene);
       renderer.dispose();
       renderer.domElement.remove();
+      onCanvasReady?.(null);
       sceneRef.current = null;
       cameraRef.current = null;
       rendererRef.current = null;
@@ -451,6 +726,15 @@ function ForceSceneCanvas({
 
     dynamicGroup.add(createCurrentArrowGroup(currentDirectionSign));
 
+    const magneticFieldDirection = magneticDetection?.fieldDirection2D || (magneticDetection?.nPole && magneticDetection.sPole)
+      ? getMagneticFieldDirection3D(magneticDetection)
+      : null;
+    const currentDirection = new THREE.Vector3(currentDirectionSign, 0, 0);
+
+    if (showIBPlane && magneticFieldDirection) {
+      dynamicGroup.add(createIBPlaneGroup(currentDirection, magneticFieldDirection));
+    }
+
     if (forces) {
       const forceGroup = createForceSceneGroup(
         forces,
@@ -463,8 +747,27 @@ function ForceSceneCanvas({
         animationProgress,
       );
       dynamicGroup.add(forceGroup);
+
+      const magneticForceDirection = createSceneForceVectors(forces, 1).resultant.clone().multiplyScalar(-1);
+      if (showLeftHandRule && magneticFieldDirection && magneticForceDirection.length() > 0.0001) {
+        dynamicGroup.add(createLeftHandRuleGroup(currentDirection, magneticFieldDirection, magneticForceDirection.normalize()));
+      }
     }
-  }, [animationProgress, compositionState, currentDirectionSign, forces, magneticDetection, magneticFieldConfig, minVisibleArrowLength, scaleFactor, showMagneticForce, showResultant, showResultOnly]);
+  }, [
+    animationProgress,
+    compositionState,
+    currentDirectionSign,
+    forces,
+    magneticDetection,
+    magneticFieldConfig,
+    minVisibleArrowLength,
+    scaleFactor,
+    showIBPlane,
+    showLeftHandRule,
+    showMagneticForce,
+    showResultant,
+    showResultOnly,
+  ]);
 
   return <div ref={mountRef} className="force-three-canvas" aria-label="立体图示与合成演示模块" />;
 }
@@ -642,12 +945,175 @@ function createCurrentArrowGroup(currentDirectionSign: 1 | -1) {
   return group;
 }
 
+function createIBPlaneGroup(currentDirection: THREE.Vector3, magneticFieldDirection: THREE.Vector3) {
+  const group = new THREE.Group();
+  const iDirection = currentDirection.clone().normalize();
+  const bDirection = magneticFieldDirection.clone().normalize();
+  const normal = iDirection.clone().cross(bDirection);
+  if (normal.length() < 0.02) return group;
+
+  const iHalf = iDirection.clone().multiplyScalar(2.25);
+  const bHalf = bDirection.clone().multiplyScalar(1.75);
+  const corners = [
+    iHalf.clone().multiplyScalar(-1).add(bHalf.clone().multiplyScalar(-1)),
+    iHalf.clone().add(bHalf.clone().multiplyScalar(-1)),
+    iHalf.clone().add(bHalf),
+    iHalf.clone().multiplyScalar(-1).add(bHalf),
+  ];
+  const geometry = new THREE.BufferGeometry().setFromPoints([corners[0], corners[1], corners[2], corners[0], corners[2], corners[3]]);
+  const material = new THREE.MeshBasicMaterial({
+    color: IB_PLANE_COLOR,
+    transparent: true,
+    opacity: 0.18,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const plane = new THREE.Mesh(geometry, material);
+  plane.renderOrder = 4;
+  group.add(plane);
+
+  const outlineGeometry = new THREE.BufferGeometry().setFromPoints([...corners, corners[0]]);
+  const outline = new THREE.Line(
+    outlineGeometry,
+    new THREE.LineBasicMaterial({ color: IB_PLANE_COLOR, transparent: true, opacity: 0.62 }),
+  );
+  group.add(outline);
+
+  const label = createTextSprite('I-B 平面', '#dbeafe');
+  label.scale.set(0.72, 0.2, 1);
+  label.position.copy(bDirection.clone().multiplyScalar(1.95).add(iDirection.clone().multiplyScalar(1.55)).add(new THREE.Vector3(0, 0.18, 0)));
+  group.add(label);
+  return group;
+}
+
+function createLeftHandRuleGroup(
+  currentDirection: THREE.Vector3,
+  magneticFieldDirection: THREE.Vector3,
+  magneticForceDirection: THREE.Vector3,
+) {
+  const group = new THREE.Group();
+  const iDirection = currentDirection.clone().normalize();
+  const bDirection = magneticFieldDirection.clone().normalize();
+  const fDirection = magneticForceDirection.clone().normalize();
+  const base = new THREE.Vector3(-1.18, 0.54, -1.0);
+  const palmNormal = bDirection.length() > 0.0001 ? bDirection : new THREE.Vector3(0, 1, 0);
+
+  const palm = new THREE.Mesh(
+    new THREE.CircleGeometry(0.38, 40),
+    new THREE.MeshBasicMaterial({
+      color: LEFT_HAND_COLOR,
+      transparent: true,
+      opacity: 0.3,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  palm.position.copy(base);
+  palm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), palmNormal);
+  group.add(palm);
+
+  const wrist = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.065, 0.065, 0.42, 18),
+    new THREE.MeshBasicMaterial({ color: LEFT_HAND_COLOR, transparent: true, opacity: 0.34 }),
+  );
+  wrist.position.copy(base.clone().add(fDirection.clone().multiplyScalar(-0.34)));
+  wrist.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), fDirection);
+  group.add(wrist);
+
+  const fingerOffset = fDirection.clone().multiplyScalar(0.08);
+  const lateral = new THREE.Vector3().crossVectors(iDirection, palmNormal);
+  if (lateral.length() < 0.001) lateral.set(0, 0, 1);
+  lateral.normalize();
+  [-0.18, -0.06, 0.06, 0.18].forEach((offset) => {
+    const origin = base
+      .clone()
+      .add(iDirection.clone().multiplyScalar(-0.45))
+      .add(lateral.clone().multiplyScalar(offset))
+      .add(fingerOffset);
+    group.add(new THREE.ArrowHelper(iDirection, origin, 0.88, CURRENT_COLOR, 0.13, 0.07));
+  });
+
+  group.add(new THREE.ArrowHelper(fDirection, base.clone().add(fDirection.clone().multiplyScalar(0.06)), 0.82, MAGNETIC_FORCE_COLOR, 0.15, 0.08));
+  group.add(new THREE.ArrowHelper(bDirection, base.clone().add(bDirection.clone().multiplyScalar(-0.45)), 0.9, '#7ddff4', 0.12, 0.07));
+
+  const iLabel = createTextSprite('I 四指方向', CURRENT_COLOR);
+  iLabel.scale.set(0.72, 0.2, 1);
+  iLabel.position.copy(base.clone().add(iDirection.clone().multiplyScalar(0.72)).add(lateral.clone().multiplyScalar(0.26)));
+  group.add(iLabel);
+
+  const fLabel = createTextSprite('F 大拇指方向', MAGNETIC_FORCE_COLOR);
+  fLabel.scale.set(0.76, 0.2, 1);
+  fLabel.position.copy(base.clone().add(fDirection.clone().multiplyScalar(0.98)));
+  group.add(fLabel);
+
+  const bLabel = createTextSprite('B 入掌心', '#7ddff4');
+  bLabel.scale.set(0.66, 0.2, 1);
+  bLabel.position.copy(base.clone().add(bDirection.clone().multiplyScalar(-0.62)).add(new THREE.Vector3(0, 0.16, 0)));
+  group.add(bLabel);
+
+  return group;
+}
+
 export function computeAngleBetweenVectors(a: [number, number, number], b: [number, number, number]) {
   const vectorA = new THREE.Vector3(...a);
   const vectorB = new THREE.Vector3(...b);
   if (vectorA.length() < 0.0001 || vectorB.length() < 0.0001) return null;
   const dot = clamp(vectorA.normalize().dot(vectorB.normalize()), -1, 1);
   return (Math.acos(dot) * 180) / Math.PI;
+}
+
+function getDirectionMetrics(
+  forces: ForceTriplet | null | undefined,
+  detection: MagneticFieldDetectionResult | undefined,
+  currentDirectionSign: 1 | -1,
+  toleranceDeg: number,
+): DirectionMetrics | null {
+  if (!forces) return null;
+
+  const resultant = createSceneForceVectors(forces, 1).resultant;
+  const fSensorMagnitude = resultant.length();
+  const magneticForce = resultant.clone().multiplyScalar(-1);
+  const fMagneticMagnitude = magneticForce.length();
+  const currentDirection: [number, number, number] = [currentDirectionSign, 0, 0];
+  const magneticForceDirection =
+    fMagneticMagnitude > 0.0001 ? (magneticForce.clone().normalize().toArray() as [number, number, number]) : undefined;
+  const magneticFieldVector = detection?.fieldDirection2D || (detection?.nPole && detection.sPole)
+    ? getMagneticFieldDirection3D(detection)
+    : null;
+  const magneticFieldDirection =
+    magneticFieldVector && magneticFieldVector.length() > 0.0001
+      ? (magneticFieldVector.clone().normalize().toArray() as [number, number, number])
+      : undefined;
+
+  const angleIF = magneticForceDirection ? computeAngleBetweenVectors(currentDirection, magneticForceDirection) ?? undefined : undefined;
+  const angleBF =
+    magneticFieldDirection && magneticForceDirection
+      ? computeAngleBetweenVectors(magneticFieldDirection, magneticForceDirection) ?? undefined
+      : undefined;
+  const perpendicularPassed =
+    typeof angleIF === 'number' &&
+    typeof angleBF === 'number' &&
+    Math.abs(angleIF - 90) <= toleranceDeg &&
+    Math.abs(angleBF - 90) <= toleranceDeg;
+  const perpendicularMessage = !magneticForceDirection
+    ? '垂直性判断：缺少有效 F磁场力'
+    : !magneticFieldDirection
+      ? '垂直性判断：等待摄像头磁场方向'
+      : perpendicularPassed
+        ? '垂直性判断：通过，F磁场力近似垂直于 I-B 平面'
+        : `垂直性判断：未满足，需同时接近 90°±${toleranceDeg}°`;
+
+  return {
+    fSensorMagnitude,
+    fMagneticMagnitude,
+    currentDirection,
+    magneticFieldDirection,
+    magneticForceDirection,
+    angleBF,
+    angleIF,
+    perpendicularPassed,
+    perpendicularMessage,
+  };
 }
 
 function getMagneticForceAngleText(forces: ForceTriplet | null | undefined, detection?: MagneticFieldDetectionResult) {
@@ -748,6 +1214,29 @@ function shouldApplyMinimumVisibleLength(forces: ForceTriplet | null, scaleFacto
     const displayLength = Math.abs(force) * scaleFactor;
     return Math.abs(force) > 0.0001 && displayLength < minVisibleArrowLength;
   });
+}
+
+function waitForNextFrame() {
+  return new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
+function formatSnapshotTime(timestamp: number) {
+  return new Date(timestamp).toLocaleTimeString();
+}
+
+function formatAngleValue(angle: number | undefined) {
+  return typeof angle === 'number' ? `${angle.toFixed(1)}°` : '--';
+}
+
+function readStoredVisualizationSplitRatio() {
+  const rawValue = window.localStorage.getItem(FORCE_VISUALIZATION_SPLIT_STORAGE_KEY);
+  const parsed = rawValue ? Number(rawValue) : DEFAULT_VISUALIZATION_SPLIT_RATIO;
+  if (!Number.isFinite(parsed)) return DEFAULT_VISUALIZATION_SPLIT_RATIO;
+  return clamp(parsed, MIN_VISUALIZATION_SPLIT_RATIO, MAX_VISUALIZATION_SPLIT_RATIO);
 }
 
 function clamp(value: number, min: number, max: number) {

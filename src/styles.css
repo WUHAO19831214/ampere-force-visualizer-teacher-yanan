@@ -586,6 +586,51 @@ button:disabled {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.magnetic-debug-panel,
+.magnetic-threshold-panel {
+  grid-column: 1 / -1;
+  border: 1px solid #d8e0e8;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 9px;
+}
+
+.magnetic-debug-panel strong {
+  display: block;
+  margin-bottom: 7px;
+  color: #263747;
+  font-size: 12px;
+}
+
+.magnetic-debug-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+  color: #526170;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.magnetic-threshold-panel {
+  padding: 0;
+}
+
+.magnetic-threshold-panel summary {
+  cursor: pointer;
+  padding: 9px;
+  color: #263747;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.magnetic-threshold-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 9px 9px;
+  border-top: 1px solid #e5ebf1;
+}
+
 .check-row {
   display: flex !important;
   align-items: center;

@@ -71,6 +71,43 @@ export interface ColorMarkerDetection {
   detectedAt: number;
 }
 
+export interface BlueThresholdConfig {
+  coreHueMin: number;
+  coreHueMax: number;
+  coreSaturationMin: number;
+  coreValueMin: number;
+  coreBMin: number;
+  coreBlueDominanceR: number;
+  coreBlueDominanceG: number;
+  coreMinChannelDiff: number;
+  looseHueMin: number;
+  looseHueMax: number;
+  looseSaturationMin: number;
+  looseValueMin: number;
+  looseBMin: number;
+  looseBlueDominanceR: number;
+  looseBlueDominanceG: number;
+  looseMinChannelDiff: number;
+  minArea: number;
+}
+
+export interface BlueMarkerDebugInfo {
+  detected: boolean;
+  center?: {
+    x: number;
+    y: number;
+  };
+  largestArea: number;
+  confidence: number;
+  coreBluePixelCount: number;
+  looseBluePixelCount: number;
+  totalBluePixelCount: number;
+  minArea: number;
+  retainedFromPrevious?: boolean;
+  warning?: string;
+  threshold: BlueThresholdConfig;
+}
+
 export interface MagneticFieldDetectionResult {
   nPole?: ColorMarkerDetection;
   sPole?: ColorMarkerDetection;
@@ -83,6 +120,7 @@ export interface MagneticFieldDetectionResult {
   timestamp: number;
   frameWidth?: number;
   frameHeight?: number;
+  blueDebug?: BlueMarkerDebugInfo;
 }
 
 export interface MagneticFieldConfig {
@@ -94,11 +132,7 @@ export interface MagneticFieldConfig {
     gMax: number;
     bMax: number;
   };
-  blueThreshold: {
-    bMin: number;
-    rMax: number;
-    gMax: number;
-  };
+  blueThreshold: BlueThresholdConfig;
   fieldLineCount: number;
   fieldLineLength: number;
   fieldLineSpacing: number;

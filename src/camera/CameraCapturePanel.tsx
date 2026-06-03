@@ -253,6 +253,10 @@ function captureVideoFrame(video: HTMLVideoElement, canvasRef: MutableRefObject<
 function MagneticFieldConfigPanel() {
   const { magneticFieldConfig, latestMagneticFieldDetection } = useExperimentDataStore();
   const update = (next: Partial<typeof magneticFieldConfig>) => experimentDataActions.updateMagneticFieldConfig(next);
+  const updateBlueThreshold = (next: Partial<typeof magneticFieldConfig.blueThreshold>) =>
+    update({ blueThreshold: { ...magneticFieldConfig.blueThreshold, ...next } });
+  const blueDebug = latestMagneticFieldDetection?.blueDebug;
+  const blueThreshold = magneticFieldConfig.blueThreshold;
 
   return (
     <div className="config-grid magnetic-config-grid">
@@ -289,6 +293,63 @@ function MagneticFieldConfigPanel() {
           {latestMagneticFieldDetection?.sPole ? '已识别' : '未识别'}
         </output>
       </label>
+      <div className="magnetic-debug-panel">
+        <strong>蓝色 S 极识别状态</strong>
+        <div className="magnetic-debug-list">
+          <span>S 极：{latestMagneticFieldDetection?.sPole ? '已识别' : '未识别'}</span>
+          <span>
+            中心：
+            {blueDebug?.center ? `${blueDebug.center.x.toFixed(1)}, ${blueDebug.center.y.toFixed(1)}` : '-'}
+          </span>
+          <span>最大连通区域：{blueDebug?.largestArea ?? 0}</span>
+          <span>置信度：{(blueDebug?.confidence ?? 0).toFixed(3)}</span>
+          <span>coreBlue：{blueDebug?.coreBluePixelCount ?? 0}</span>
+          <span>looseBlue：{blueDebug?.looseBluePixelCount ?? 0}</span>
+          <span>minArea：{blueDebug?.minArea ?? blueThreshold.minArea}</span>
+          <span>状态：{blueDebug?.warning ?? (blueDebug?.retainedFromPrevious ? '短时保留上一帧 S 极' : '正常')}</span>
+        </div>
+      </div>
+      <details className="magnetic-threshold-panel">
+        <summary>蓝色阈值高级配置</summary>
+        <div className="magnetic-threshold-grid">
+          <ThresholdNumber label="核心 H min" value={blueThreshold.coreHueMin} onChange={(value) => updateBlueThreshold({ coreHueMin: value })} />
+          <ThresholdNumber label="核心 H max" value={blueThreshold.coreHueMax} onChange={(value) => updateBlueThreshold({ coreHueMax: value })} />
+          <ThresholdNumber label="核心 S min" step={0.01} value={blueThreshold.coreSaturationMin} onChange={(value) => updateBlueThreshold({ coreSaturationMin: value })} />
+          <ThresholdNumber label="核心 V min" step={0.01} value={blueThreshold.coreValueMin} onChange={(value) => updateBlueThreshold({ coreValueMin: value })} />
+          <ThresholdNumber label="核心 B min" value={blueThreshold.coreBMin} onChange={(value) => updateBlueThreshold({ coreBMin: value })} />
+          <ThresholdNumber label="核心 B/R" step={0.01} value={blueThreshold.coreBlueDominanceR} onChange={(value) => updateBlueThreshold({ coreBlueDominanceR: value })} />
+          <ThresholdNumber label="核心 B/G" step={0.01} value={blueThreshold.coreBlueDominanceG} onChange={(value) => updateBlueThreshold({ coreBlueDominanceG: value })} />
+          <ThresholdNumber label="核心通道差" value={blueThreshold.coreMinChannelDiff} onChange={(value) => updateBlueThreshold({ coreMinChannelDiff: value })} />
+          <ThresholdNumber label="宽松 H min" value={blueThreshold.looseHueMin} onChange={(value) => updateBlueThreshold({ looseHueMin: value })} />
+          <ThresholdNumber label="宽松 H max" value={blueThreshold.looseHueMax} onChange={(value) => updateBlueThreshold({ looseHueMax: value })} />
+          <ThresholdNumber label="宽松 S min" step={0.01} value={blueThreshold.looseSaturationMin} onChange={(value) => updateBlueThreshold({ looseSaturationMin: value })} />
+          <ThresholdNumber label="宽松 V min" step={0.01} value={blueThreshold.looseValueMin} onChange={(value) => updateBlueThreshold({ looseValueMin: value })} />
+          <ThresholdNumber label="宽松 B min" value={blueThreshold.looseBMin} onChange={(value) => updateBlueThreshold({ looseBMin: value })} />
+          <ThresholdNumber label="宽松 B/R" step={0.01} value={blueThreshold.looseBlueDominanceR} onChange={(value) => updateBlueThreshold({ looseBlueDominanceR: value })} />
+          <ThresholdNumber label="宽松 B/G" step={0.01} value={blueThreshold.looseBlueDominanceG} onChange={(value) => updateBlueThreshold({ looseBlueDominanceG: value })} />
+          <ThresholdNumber label="宽松通道差" value={blueThreshold.looseMinChannelDiff} onChange={(value) => updateBlueThreshold({ looseMinChannelDiff: value })} />
+          <ThresholdNumber label="S 极最小面积" value={blueThreshold.minArea} onChange={(value) => updateBlueThreshold({ minArea: value })} />
+        </div>
+      </details>
     </div>
+  );
+}
+
+function ThresholdNumber({
+  label,
+  value,
+  step = 1,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  step?: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label>
+      {label}
+      <input type="number" step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+    </label>
   );
 }

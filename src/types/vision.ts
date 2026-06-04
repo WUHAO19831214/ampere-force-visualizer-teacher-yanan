@@ -134,7 +134,12 @@ export interface MagneticFieldConfig {
   };
   blueThreshold: BlueThresholdConfig;
   fieldLineCount: number;
+  fieldLineRows: number;
+  fieldLineCols: number;
   fieldLineLength: number;
   fieldLineSpacing: number;
+  fieldLineXSpacing: number;
+  fieldLineSideSpacing: number;
+  fieldLineOpacity: number;
   wirePosition3D: [number, number, number];
 }

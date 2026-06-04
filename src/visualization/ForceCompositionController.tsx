@@ -1,9 +1,8 @@
-import type { CompositionState, DirectionMetrics, ForceScaleMode, ForceTriplet, KeySnapshot } from './ForceVisualization3D';
-import { PhysicsSymbol, toUnicodePhysicsSymbol } from '../components/PhysicsSymbol';
+import type { DirectionMetrics, ForceScaleMode, ForceTriplet, KeySnapshot } from './ForceVisualization3D';
+import { PhysicsSymbol } from '../components/PhysicsSymbol';
 
 interface ForceCompositionControllerProps {
   forces: ForceTriplet | null;
-  waitingChannels: string[];
   isHoldingFrame: boolean;
   showResultOnly: boolean;
   showResultant: boolean;
@@ -16,18 +15,15 @@ interface ForceCompositionControllerProps {
   directionMetrics: DirectionMetrics | null;
   perpendicularToleranceDeg: number;
   animationRunning: boolean;
-  compositionState: CompositionState;
   scaleFactor: number;
   forceScaleMode: ForceScaleMode;
   manualForceScale: number;
   minForceScale: number;
   maxForceScale: number;
   minVisibleArrowLength: number;
-  hasMinVisibleAmplification: boolean;
   maxForce: number;
   maxArrowLength: number;
   showFieldLines: boolean;
-  magneticStatusText: string;
   isViewLocked: boolean;
   onTogglePause: () => void;
   onCompose: () => void;
@@ -53,7 +49,6 @@ interface ForceCompositionControllerProps {
 
 export function ForceCompositionController({
   forces,
-  waitingChannels,
   isHoldingFrame,
   showResultOnly,
   showResultant,
@@ -66,18 +61,15 @@ export function ForceCompositionController({
   directionMetrics,
   perpendicularToleranceDeg,
   animationRunning,
-  compositionState,
   scaleFactor,
   forceScaleMode,
   manualForceScale,
   minForceScale,
   maxForceScale,
   minVisibleArrowLength,
-  hasMinVisibleAmplification,
   maxForce,
   maxArrowLength,
   showFieldLines,
-  magneticStatusText,
   isViewLocked,
   onTogglePause,
   onCompose,
@@ -100,33 +92,8 @@ export function ForceCompositionController({
   onLockScale,
   onResetScale,
 }: ForceCompositionControllerProps) {
-  const resultant = forces ? Math.sqrt(forces.fx ** 2 + forces.fy ** 2 + forces.fz ** 2) : 0;
-
   return (
     <div className="force-control-panel">
-      <div className="force-control-summary">
-        <div className="force-summary-grid">
-          <span>比例尺：1 N = {scaleFactor.toFixed(2)} 图示单位</span>
-          <span>模式：{getScaleModeLabel(forceScaleMode)}</span>
-          <span>
-            <PhysicsSymbol symbol="F" /> = {forces ? `${resultant.toFixed(2)} N` : '-'}
-          </span>
-          <span>状态：{getStateLabel(compositionState, animationRunning, showResultOnly)}</span>
-          <span>磁场：{magneticStatusText}</span>
-        </div>
-        {waitingChannels.length > 0 && (
-          <p>
-            等待 OCR 数据：
-            {waitingChannels.map((channel, index) => (
-              <span key={channel}>
-                {index > 0 && '、'}
-                <PhysicsSymbol symbol={channel} />
-              </span>
-            ))}
-          </p>
-        )}
-        {hasMinVisibleAmplification && <p>小于最小可见长度的非零力已放大显示，仅用于方向观察。</p>}
-      </div>
       <div className="force-control-buttons">
         <button className={isHoldingFrame ? 'secondary-button is-active' : undefined} onClick={onTogglePause}>
           {isHoldingFrame ? '开始' : '暂停'}
@@ -167,6 +134,42 @@ export function ForceCompositionController({
           </button>
         </div>
       </div>
+      <details className="key-snapshot-panel">
+        <summary>关键图像记录</summary>
+        <div className="snapshot-actions">
+          <button type="button" onClick={onManualSnapshot} disabled={!forces}>
+            手动截图
+          </button>
+          <button type="button" className={autoSnapshotEnabled ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleAutoSnapshot}>
+            {autoSnapshotEnabled ? '关闭自动截图' : '自动截图'}
+          </button>
+          <button type="button" className={includeLeftHandRuleInSnapshot ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleIncludeLeftHandRule}>
+            截图含左手：{includeLeftHandRuleInSnapshot ? '开' : '关'}
+          </button>
+          <button type="button" onClick={onShowSixSnapshotGrid} disabled={keySnapshots.length === 0}>
+            六图展示
+          </button>
+          <button type="button" className="secondary-button" onClick={onClearSnapshots} disabled={keySnapshots.length === 0}>
+            清空记录
+          </button>
+        </div>
+        <div className="snapshot-thumb-list">
+          {keySnapshots.length === 0 && <p className="snapshot-empty-line">暂无关键图像。可手动截图，或开启自动截图记录满足垂直关系的关键画面。</p>}
+          {keySnapshots.map((snapshot) => (
+            <button type="button" className="snapshot-thumb" key={snapshot.id} onClick={() => onSelectSnapshot(snapshot)}>
+              <img src={snapshot.imageDataUrl} alt={snapshot.name} />
+              <span>
+                <strong>{snapshot.name}</strong>
+                <small>
+                  {new Date(snapshot.createdAt).toLocaleTimeString()} · B-F {formatAngle(snapshot.angles.angleBF)} · I-F{' '}
+                  {formatAngle(snapshot.angles.angleIF)}
+                </small>
+                <small>{snapshot.perpendicularPassed ? '垂直性：通过' : '垂直性：未满足'}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      </details>
       <details className="force-scale-settings">
         <summary>力图示比例尺</summary>
         <div className="force-scale-controls">
@@ -209,74 +212,24 @@ export function ForceCompositionController({
           </div>
         </div>
       </details>
-      <details className="key-snapshot-panel">
-        <summary>关键图像记录</summary>
-        <div className="snapshot-actions">
-          <button type="button" onClick={onManualSnapshot} disabled={!forces}>
-            手动截图
-          </button>
-          <button type="button" className={autoSnapshotEnabled ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleAutoSnapshot}>
-            {autoSnapshotEnabled ? '关闭自动截图' : '自动截图'}
-          </button>
-          <button type="button" className={includeLeftHandRuleInSnapshot ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleIncludeLeftHandRule}>
-            截图含左手：{includeLeftHandRuleInSnapshot ? '开' : '关'}
-          </button>
-          <button type="button" onClick={onShowSixSnapshotGrid} disabled={keySnapshots.length === 0}>
-            六图展示
-          </button>
-          <button type="button" className="secondary-button" onClick={onClearSnapshots} disabled={keySnapshots.length === 0}>
-            清空记录
-          </button>
-        </div>
-        <div className="snapshot-thumb-list">
-          {keySnapshots.length === 0 && <p>暂无关键图像。可手动截图，或开启自动截图记录满足垂直关系的关键画面。</p>}
-          {keySnapshots.map((snapshot) => (
-            <button type="button" className="snapshot-thumb" key={snapshot.id} onClick={() => onSelectSnapshot(snapshot)}>
-              <img src={snapshot.imageDataUrl} alt={snapshot.name} />
-              <span>
-                <strong>{snapshot.name}</strong>
-                <small>
-                  {new Date(snapshot.createdAt).toLocaleTimeString()} · B-F {formatAngle(snapshot.angles.angleBF)} · I-F{' '}
-                  {formatAngle(snapshot.angles.angleIF)}
-                </small>
-                <small>{snapshot.perpendicularPassed ? '垂直性：通过' : '垂直性：未满足'}</small>
-              </span>
-            </button>
-          ))}
-        </div>
-      </details>
       {directionMetrics && <PerpendicularStatus metrics={directionMetrics} toleranceDeg={perpendicularToleranceDeg} />}
     </div>
   );
 }
 
 function PerpendicularStatus({ metrics, toleranceDeg }: { metrics: DirectionMetrics; toleranceDeg: number }) {
+  const message = metrics.perpendicularMessage.replace(/^垂直性判断：/, '');
+
   return (
     <output className={metrics.perpendicularPassed ? 'perpendicular-status is-passed' : 'perpendicular-status'}>
-      <strong>垂直性判断：{metrics.perpendicularPassed ? '通过' : '未满足'}</strong>
       <span>
-        B-F：{formatAngle(metrics.angleBF)}；I-F：{formatAngle(metrics.angleIF)}；目标：90°±{toleranceDeg}°
+        垂直性判断：{metrics.perpendicularPassed ? '通过' : '未满足'}；B-F：{formatAngle(metrics.angleBF)}；I-F：
+        {formatAngle(metrics.angleIF)}；目标：90°±{toleranceDeg}°{message ? `；${message}` : ''}
       </span>
-      <small>{metrics.perpendicularMessage.replace(/^垂直性判断：/, '')}</small>
     </output>
   );
 }
 
 function formatAngle(angle: number | undefined) {
   return typeof angle === 'number' ? `${angle.toFixed(1)}°` : '--';
-}
-
-function getStateLabel(state: CompositionState, animationRunning: boolean, showResultOnly: boolean) {
-  if (showResultOnly) return '仅显示合力';
-  if (animationRunning) {
-    return state === 'compose12' ? `正在合成 ${toUnicodePhysicsSymbol('Fy')} 与 ${toUnicodePhysicsSymbol('Fz')}` : '正在显示合力';
-  }
-  if (state === 'result') return '合成结果';
-  return '实时力图示';
-}
-
-function getScaleModeLabel(mode: ForceScaleMode) {
-  if (mode === 'manual') return '手动';
-  if (mode === 'locked') return '锁定';
-  return '自动';
 }

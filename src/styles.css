@@ -1327,9 +1327,13 @@ button:disabled {
   min-height: 0;
 }
 
-.force-visualization-panel.is-scene-fullscreen .force-vertical-resizer,
-.force-visualization-panel.is-scene-fullscreen .force-control-region {
+.force-visualization-panel.is-scene-fullscreen .force-vertical-resizer {
   display: none;
+}
+
+.force-visualization-panel.is-scene-fullscreen .force-control-region {
+  flex: 0 0 auto !important;
+  max-height: 34vh;
 }
 
 .force-three-canvas,
@@ -1562,32 +1566,6 @@ button:disabled {
   background: #0b1118;
 }
 
-.force-control-summary {
-  min-width: 0;
-}
-
-.force-control-summary h2 {
-  margin: 0 0 6px;
-  font-size: 16px;
-  letter-spacing: 0;
-  white-space: normal;
-}
-
-.force-control-summary p {
-  margin: 6px 0 0;
-  color: #f2c56a;
-  font-size: 12px;
-}
-
-.force-summary-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px 11px;
-  color: #b5c4d2;
-  font-size: 12px;
-  line-height: 1.35;
-}
-
 .force-control-buttons {
   display: flex;
   flex-wrap: wrap;
@@ -1628,28 +1606,23 @@ button:disabled {
 }
 
 .perpendicular-status {
-  display: grid;
-  gap: 2px;
+  display: block;
   width: 100%;
   max-width: 100%;
-  padding: 5px 8px;
+  overflow-x: auto;
+  padding: 4px 8px;
   border: 1px solid rgba(240, 178, 79, 0.45);
   border-radius: 6px;
   background: rgba(255, 247, 230, 0.08);
   color: #f4d29d;
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
-.perpendicular-status strong {
+.perpendicular-status span {
   color: inherit;
-  font-size: 12px;
-}
-
-.perpendicular-status span,
-.perpendicular-status small {
-  color: #c5d3df;
-  font-size: 11px;
+  font-size: inherit;
 }
 
 .perpendicular-status.is-passed {
@@ -1759,6 +1732,13 @@ button:disabled {
   color: #aebfcd;
   font-size: 12px;
   line-height: 1.45;
+}
+
+.snapshot-empty-line {
+  grid-column: 1 / -1;
+  white-space: nowrap;
+  overflow-x: auto;
+  max-width: 100%;
 }
 
 .snapshot-thumb {

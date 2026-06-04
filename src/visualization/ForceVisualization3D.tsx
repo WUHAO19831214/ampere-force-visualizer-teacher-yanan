@@ -179,7 +179,6 @@ export function ForceVisualization3D() {
   const scaleFactor = animationForceScale ?? (isPaused ? heldForceScale ?? selectedForceScale : selectedForceScale);
   const maxForce = getMaxForceMagnitude(activeForces);
   const maxArrowLength = maxForce * scaleFactor;
-  const hasMinVisibleAmplification = shouldApplyMinimumVisibleLength(activeForces, scaleFactor, MIN_VISIBLE_ARROW_LENGTH);
   const magneticAngleValue = showMagneticAngle ? getMagneticForceAngleValue(activeForces, latestMagneticFieldDetection) : null;
   const directionMetrics = useMemo(
     () => getDirectionMetrics(activeForces, latestMagneticFieldDetection, currentDirectionSign, PERPENDICULAR_TOLERANCE_DEG),
@@ -494,7 +493,6 @@ export function ForceVisualization3D() {
       <div className="force-control-region" style={{ flexBasis: `calc(${(1 - visualizationSplitRatio) * 100}% - 4px)` }}>
         <ForceCompositionController
           forces={activeForces}
-          waitingChannels={waitingChannels}
           isHoldingFrame={isHoldingFrame}
           showResultOnly={showResultOnly}
           showResultant={showResultant}
@@ -507,18 +505,15 @@ export function ForceVisualization3D() {
           directionMetrics={directionMetrics}
           perpendicularToleranceDeg={PERPENDICULAR_TOLERANCE_DEG}
           animationRunning={animationRunning}
-          compositionState={compositionState}
           scaleFactor={scaleFactor}
           forceScaleMode={forceScaleMode}
           manualForceScale={manualForceScale}
           minForceScale={MIN_FORCE_SCALE}
           maxForceScale={MAX_FORCE_SCALE}
           minVisibleArrowLength={MIN_VISIBLE_ARROW_LENGTH}
-          hasMinVisibleAmplification={hasMinVisibleAmplification}
           maxForce={maxForce}
           maxArrowLength={maxArrowLength}
           showFieldLines={magneticFieldConfig.showFieldLines}
-          magneticStatusText={getMagneticStatusText(latestMagneticFieldDetection, magneticFieldConfig.showFieldLines)}
           isViewLocked={isViewLocked}
           onTogglePause={handleTogglePause}
           onCompose={handleCompose}
@@ -1202,15 +1197,6 @@ function readTesseractForces(latestValues: Record<string, PhysicsSample>): Force
   };
 }
 
-function getMagneticStatusText(
-  detection: MagneticFieldDetectionResult | undefined,
-  showFieldLines: boolean,
-) {
-  if (!showFieldLines) return '隐藏';
-  if (detection?.nPole && detection.sPole) return 'N → S 已识别';
-  return '默认方向';
-}
-
 function getWaitingChannels(latestValues: Record<string, PhysicsSample>) {
   return [
     { symbol: 'Fy', fallback: 'F2' },
@@ -1266,13 +1252,6 @@ function applyMinimumVisibleLength(vector: THREE.Vector3, minVisibleArrowLength:
   const length = vector.length();
   if (length < 0.0001 || length >= minVisibleArrowLength) return vector;
   return vector.clone().setLength(minVisibleArrowLength);
-}
-
-function shouldApplyMinimumVisibleLength(forces: ForceTriplet | null, scaleFactor: number, minVisibleArrowLength: number) {
-  return getForceMagnitudes(forces).some((force) => {
-    const displayLength = Math.abs(force) * scaleFactor;
-    return Math.abs(force) > 0.0001 && displayLength < minVisibleArrowLength;
-  });
 }
 
 function waitForNextFrame() {

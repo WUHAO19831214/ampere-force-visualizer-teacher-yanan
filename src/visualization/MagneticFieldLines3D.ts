@@ -6,7 +6,10 @@ import { createTextSprite } from './ForceArrow3D';
 const WIRE_COLOR = '#d6dee8';
 const FIELD_LINE_SPACING_MULTIPLIER = 3;
 const FIELD_LINE_LENGTH_MULTIPLIER = 0.7;
-const FIELD_SIDE_AVOIDANCE_OFFSET = 0.22;
+const DEFAULT_FIELD_ROWS = 4;
+const DEFAULT_FIELD_COLS = 4;
+const DEFAULT_FIELD_X_SPACING = 0.76;
+const DEFAULT_FIELD_SIDE_SPACING = 0.76;
 
 const FIELD_THEME_COLORS = {
   dark: {
@@ -34,35 +37,41 @@ export function createMagneticFieldLinesGroup(
   const colors = FIELD_THEME_COLORS[theme];
   const wirePosition = new THREE.Vector3(...config.wirePosition3D);
   const direction = getMagneticFieldDirection3D(detection);
-  const yzPerpendicular = new THREE.Vector3(0, -direction.z, direction.y).normalize();
-  const wireAxisOffset = new THREE.Vector3(1, 0, 0);
-  const count = Math.max(2, Math.min(12, config.fieldLineCount));
+  const sideDirection = new THREE.Vector3(0, -direction.z, direction.y);
+  if (sideDirection.length() < 0.001) sideDirection.set(0, 0, 1);
+  sideDirection.normalize();
+  const xDirection = new THREE.Vector3(1, 0, 0);
+  const rows = Math.max(1, Math.min(8, config.fieldLineRows ?? DEFAULT_FIELD_ROWS));
+  const cols = Math.max(1, Math.min(8, config.fieldLineCols ?? DEFAULT_FIELD_COLS));
   const length = Math.max(1.0, config.fieldLineLength * FIELD_LINE_LENGTH_MULTIPLIER);
-  const spacing = Math.max(0.12, config.fieldLineSpacing * FIELD_LINE_SPACING_MULTIPLIER);
-  const groupSideOffset = yzPerpendicular.clone().multiplyScalar(FIELD_SIDE_AVOIDANCE_OFFSET);
+  const legacySpacing = Math.max(0.12, config.fieldLineSpacing * FIELD_LINE_SPACING_MULTIPLIER);
+  const xSpacing = Math.max(0.24, config.fieldLineXSpacing ?? Math.max(DEFAULT_FIELD_X_SPACING, legacySpacing * 0.75));
+  const sideSpacing = Math.max(0.24, config.fieldLineSideSpacing ?? Math.max(DEFAULT_FIELD_SIDE_SPACING, legacySpacing * 0.75));
+  const shaftOpacity = clamp(config.fieldLineOpacity ?? colors.shaftOpacity, 0.18, 0.58);
+  const arrowOpacity = clamp(shaftOpacity + 0.18, 0.42, colors.arrowOpacity);
 
   addWireMarker(group, wirePosition);
 
-  for (let index = 0; index < count; index += 1) {
-    const centeredIndex = index - (count - 1) / 2;
-    const wireOffset = centeredIndex * Math.min(spacing * 0.18, 0.22);
-    const sideOffset = centeredIndex * spacing * 0.26;
-    const center = wirePosition
-      .clone()
-      .add(wireAxisOffset.clone().multiplyScalar(wireOffset))
-      .add(yzPerpendicular.clone().multiplyScalar(sideOffset))
-      .add(groupSideOffset);
-    const start = center.clone().add(direction.clone().multiplyScalar(-length / 2));
-    const shaft = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.018, 0.018, length * 0.86, 14),
-      new THREE.MeshBasicMaterial({ color: colors.line, transparent: true, opacity: colors.shaftOpacity }),
-    );
-    shaft.position.copy(start.clone().add(direction.clone().multiplyScalar((length * 0.86) / 2)));
-    shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
-    group.add(shaft);
-    const arrow = new THREE.ArrowHelper(direction, start, length, colors.head, 0.34, 0.2);
-    setOpacity(arrow, colors.arrowOpacity);
-    group.add(arrow);
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      const xOffset = (col - (cols - 1) / 2) * xSpacing;
+      const sideOffset = (row - (rows - 1) / 2) * sideSpacing;
+      const center = wirePosition
+        .clone()
+        .add(xDirection.clone().multiplyScalar(xOffset))
+        .add(sideDirection.clone().multiplyScalar(sideOffset));
+      const start = center.clone().add(direction.clone().multiplyScalar(-length / 2));
+      const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.014, 0.014, length * 0.82, 12),
+        new THREE.MeshBasicMaterial({ color: colors.line, transparent: true, opacity: shaftOpacity }),
+      );
+      shaft.position.copy(start.clone().add(direction.clone().multiplyScalar((length * 0.82) / 2)));
+      shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+      group.add(shaft);
+      const arrow = new THREE.ArrowHelper(direction, start, length, colors.head, 0.28, 0.15);
+      setOpacity(arrow, arrowOpacity);
+      group.add(arrow);
+    }
   }
 
   const label = createTextSprite('B', colors.label);
@@ -70,10 +79,9 @@ export function createMagneticFieldLinesGroup(
   label.position.copy(
     wirePosition
       .clone()
-      .add(groupSideOffset)
-      .add(yzPerpendicular.clone().multiplyScalar(spacing * 0.58))
-      .add(direction.clone().multiplyScalar(length * 0.34))
-      .add(new THREE.Vector3(0.18, 0.24, 0.12)),
+      .add(direction.clone().multiplyScalar(length * 0.45))
+      .add(sideDirection.clone().multiplyScalar(sideSpacing * 2.2))
+      .add(xDirection.clone().multiplyScalar(xSpacing * 1.8)),
   );
   group.add(label);
 
@@ -133,4 +141,8 @@ function setOpacity(object: THREE.Object3D, opacity: number) {
       material.depthWrite = false;
     });
   });
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }

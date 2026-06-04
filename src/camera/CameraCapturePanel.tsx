@@ -285,13 +285,67 @@ function MagneticFieldConfigPanel() {
         显示磁感线
       </label>
       <label>
-        磁感线数量
+        磁感线排数
         <input
           type="number"
-          min={2}
-          max={12}
-          value={magneticFieldConfig.fieldLineCount}
-          onChange={(event) => update({ fieldLineCount: Number(event.target.value) })}
+          min={1}
+          max={8}
+          value={magneticFieldConfig.fieldLineRows}
+          onChange={(event) => update({ fieldLineRows: Number(event.target.value) })}
+        />
+      </label>
+      <label>
+        磁感线列数
+        <input
+          type="number"
+          min={1}
+          max={8}
+          value={magneticFieldConfig.fieldLineCols}
+          onChange={(event) => update({ fieldLineCols: Number(event.target.value) })}
+        />
+      </label>
+      <label>
+        x 方向间距
+        <input
+          type="number"
+          min={0.2}
+          max={2}
+          step={0.05}
+          value={magneticFieldConfig.fieldLineXSpacing}
+          onChange={(event) => update({ fieldLineXSpacing: Number(event.target.value) })}
+        />
+      </label>
+      <label>
+        y-z 侧向间距
+        <input
+          type="number"
+          min={0.2}
+          max={2}
+          step={0.05}
+          value={magneticFieldConfig.fieldLineSideSpacing}
+          onChange={(event) => update({ fieldLineSideSpacing: Number(event.target.value) })}
+        />
+      </label>
+      <label>
+        磁感线长度
+        <input
+          type="number"
+          min={1}
+          max={8}
+          step={0.1}
+          value={magneticFieldConfig.fieldLineLength}
+          onChange={(event) => update({ fieldLineLength: Number(event.target.value) })}
+        />
+      </label>
+      <label>
+        磁感线透明度
+        <input
+          type="number"
+          min={0.18}
+          max={0.58}
+          step={0.02}
+          value={magneticFieldConfig.fieldLineOpacity}
+          onChange={(event) => update({ fieldLineOpacity: Number(event.target.value) })}
         />
       </label>
       <label>

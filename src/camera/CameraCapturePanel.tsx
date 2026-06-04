@@ -192,22 +192,6 @@ export function CameraCapturePanel() {
           <p>识别 N、S 极并读取磁场方向</p>
         </div>
       </div>
-      <div className="toolbar">
-        <button onClick={openCamera} disabled={isCameraOn}>
-          打开摄像头
-        </button>
-        <button onClick={closeCamera} disabled={!isCameraOn}>
-          关闭摄像头
-        </button>
-        <select value={deviceId} onChange={(event) => setDeviceId(event.target.value)} aria-label="选择摄像头设备">
-          <option value="">默认摄像头</option>
-          {devices.map((device, index) => (
-            <option key={device.deviceId} value={device.deviceId}>
-              {device.label || `摄像头 ${index + 1}`}
-            </option>
-          ))}
-        </select>
-      </div>
       <div className="media-stage">
         <video ref={videoRef} className="capture-video camera-video" muted playsInline />
         {!isCameraOn && (
@@ -224,6 +208,22 @@ export function CameraCapturePanel() {
           onSelect={setSelectedId}
           onChange={updateRoi}
         />
+      </div>
+      <div className="toolbar panel-actions-below">
+        <button onClick={openCamera} disabled={isCameraOn}>
+          打开摄像头
+        </button>
+        <button onClick={closeCamera} disabled={!isCameraOn}>
+          关闭摄像头
+        </button>
+        <select value={deviceId} onChange={(event) => setDeviceId(event.target.value)} aria-label="选择摄像头设备">
+          <option value="">默认摄像头</option>
+          {devices.map((device, index) => (
+            <option key={device.deviceId} value={device.deviceId}>
+              {device.label || `摄像头 ${index + 1}`}
+            </option>
+          ))}
+        </select>
       </div>
       <details className="config-drawer advanced-classroom-tools">
         <summary title="高级设置 / 调试工具">

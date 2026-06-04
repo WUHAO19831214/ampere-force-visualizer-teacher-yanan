@@ -169,7 +169,7 @@ button:disabled {
 
 .ampere-overview-toggle {
   width: 100%;
-  min-height: 42px;
+  min-height: 54px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -194,7 +194,7 @@ button:disabled {
 }
 
 .ampere-overview-body {
-  height: calc(100% - 42px);
+  height: calc(100% - 54px);
   min-height: 0;
 }
 
@@ -333,6 +333,16 @@ button:disabled {
   font-size: 12px;
 }
 
+.panel-screen .panel-titlebar,
+.panel-camera .panel-titlebar {
+  padding: 8px 14px 6px;
+}
+
+.panel-screen .panel-titlebar p,
+.panel-camera .panel-titlebar p {
+  margin-top: 2px;
+}
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -343,6 +353,12 @@ button:disabled {
 
 .screen-toolbar {
   flex: 0 0 auto;
+}
+
+.panel-actions-below {
+  flex: 0 0 auto;
+  padding: 0 14px 8px;
+  margin-top: -2px;
 }
 
 .toolbar-field {

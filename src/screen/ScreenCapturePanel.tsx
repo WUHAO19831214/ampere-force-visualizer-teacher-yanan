@@ -464,14 +464,6 @@ export function ScreenCapturePanel() {
           <p>读取数字化实验软件中的实时力数据</p>
         </div>
       </div>
-      <div className="toolbar screen-toolbar">
-        <button onClick={startCapture} disabled={isCapturing}>
-          开始捕获屏幕
-        </button>
-        <button onClick={stopCapture} disabled={!isCapturing}>
-          停止捕获
-        </button>
-      </div>
       <div className="media-stage screen-preview-fixed" ref={previewRef}>
         <video
           ref={(node) => {
@@ -509,6 +501,14 @@ export function ScreenCapturePanel() {
           onSelect={experimentDataActions.setSelectedScreenRoiId}
           onChange={updateRoi}
         />
+      </div>
+      <div className="toolbar screen-toolbar panel-actions-below">
+        <button onClick={startCapture} disabled={isCapturing}>
+          开始捕获屏幕
+        </button>
+        <button onClick={stopCapture} disabled={!isCapturing}>
+          停止捕获
+        </button>
       </div>
       <div className="screen-bottom-scroll">
         <details className="config-drawer advanced-classroom-tools">

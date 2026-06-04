@@ -188,7 +188,8 @@ export function CameraCapturePanel() {
     <section className="panel panel-camera">
       <div className="panel-titlebar">
         <div>
-          <h2>摄像头真实实验场景区</h2>
+          <h2>磁场方向读取区</h2>
+          <p>识别 N、S 极并读取磁场方向</p>
         </div>
       </div>
       <div className="toolbar">
@@ -206,9 +207,6 @@ export function CameraCapturePanel() {
             </option>
           ))}
         </select>
-        <button onClick={snapshot} disabled={!isCameraOn}>
-          截取当前画面
-        </button>
       </div>
       <div className="media-stage">
         <video ref={videoRef} className="capture-video camera-video" muted playsInline />
@@ -227,13 +225,23 @@ export function CameraCapturePanel() {
           onChange={updateRoi}
         />
       </div>
-      <details className="config-drawer">
-        <summary>摄像头视觉 ROI 配置</summary>
-        <VisionConfigPanel roi={selectedRoi} onChange={updateRoi} />
-      </details>
-      <details className="config-drawer">
-        <summary>磁场识别设置</summary>
-        <MagneticFieldConfigPanel />
+      <details className="config-drawer advanced-classroom-tools">
+        <summary title="高级设置 / 调试工具">
+          <span className="sr-only">高级设置 / 调试工具</span>
+        </summary>
+        <div className="advanced-tool-row">
+          <button onClick={snapshot} disabled={!isCameraOn}>
+            截取当前画面
+          </button>
+        </div>
+        <details className="nested-debug-drawer">
+          <summary>摄像头视觉 ROI 配置</summary>
+          <VisionConfigPanel roi={selectedRoi} onChange={updateRoi} />
+        </details>
+        <details className="nested-debug-drawer">
+          <summary>磁场识别设置</summary>
+          <MagneticFieldConfigPanel />
+        </details>
       </details>
     </section>
   );

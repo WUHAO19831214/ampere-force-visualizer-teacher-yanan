@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { DEFAULT_LAYOUT, loadLayoutRatios, saveLayoutRatios } from '../../utils/layoutStorage';
+import schoolLogo from '../../assets/school-logo.png';
 
 interface ResizableThreePanelLayoutProps {
   left: ReactNode;
@@ -10,7 +11,7 @@ interface ResizableThreePanelLayoutProps {
 
 export function ResizableThreePanelLayout({ left, middle, rightTop, rightBottom }: ResizableThreePanelLayoutProps) {
   const [layout, setLayout] = useState(() => loadLayoutRatios());
-  const [isRightPanelFullscreen, setIsRightPanelFullscreen] = useState(false);
+  const [isDataOverviewExpanded, setIsDataOverviewExpanded] = useState(false);
 
   useEffect(() => {
     saveLayoutRatios(layout);
@@ -74,17 +75,20 @@ export function ResizableThreePanelLayout({ left, middle, rightTop, rightBottom 
 
   return (
     <main className="app-shell">
-      <div className="app-header">
-        <div>
-          <h1>Physics Multi-Source Experiment Bridge</h1>
-          <p>物理实验多源数据采集与三维可视化平台</p>
+      <div className="app-header classroom-header">
+        <div className="school-brand">
+          <img src={schoolLogo} className="school-logo" alt="上海市延安中学校徽" />
+          <div className="school-title-block">
+            <h1>安培力可视化平台</h1>
+            <p>上海市延安中学</p>
+          </div>
         </div>
         <button className="ghost-button" onClick={resetLayout}>
           重置布局
         </button>
       </div>
-      <section className={`three-panel-layout ${isRightPanelFullscreen ? 'right-panel-fullscreen-layout' : ''}`}>
-        {!isRightPanelFullscreen && !layout.leftCollapsed && (
+      <section className="three-panel-layout">
+        {!layout.leftCollapsed && (
           <>
             <div className="layout-panel left-layout-panel" style={{ width: `${layout.left}%` }}>
               {left}
@@ -105,7 +109,7 @@ export function ResizableThreePanelLayout({ left, middle, rightTop, rightBottom 
             />
           </>
         )}
-        {!isRightPanelFullscreen && layout.leftCollapsed && (
+        {layout.leftCollapsed && (
           <div className="left-panel-collapsed-rail">
             <button
               className="left-panel-expand-toggle"
@@ -117,39 +121,40 @@ export function ResizableThreePanelLayout({ left, middle, rightTop, rightBottom 
             </button>
           </div>
         )}
-        {!isRightPanelFullscreen && (
-          <>
-            <div className={`layout-panel ${layout.leftCollapsed ? 'balanced-layout-panel' : ''}`} style={layout.leftCollapsed ? undefined : { width: `${layout.middle}%` }}>
-              {middle}
-            </div>
-            <div
-              className="panel-resizer panel-resizer-x"
-              onPointerDown={(event) => startHorizontalDrag('middle-right', event)}
-              role="separator"
-              aria-label="调整中间与右侧宽度"
-            />
-          </>
-        )}
+        <div className={`layout-panel ${layout.leftCollapsed ? 'balanced-layout-panel' : ''}`} style={layout.leftCollapsed ? undefined : { width: `${layout.middle}%` }}>
+          {middle}
+        </div>
         <div
-          className={`layout-panel right-panel ${layout.leftCollapsed && !isRightPanelFullscreen ? 'balanced-layout-panel' : ''} ${isRightPanelFullscreen ? 'right-panel-fullscreen-active' : ''}`}
-          style={isRightPanelFullscreen || layout.leftCollapsed ? undefined : { width: `${layout.right}%` }}
+          className="panel-resizer panel-resizer-x"
+          onPointerDown={(event) => startHorizontalDrag('middle-right', event)}
+          role="separator"
+          aria-label="调整中间与右侧宽度"
+        />
+        <div
+          className={`layout-panel right-panel ${layout.leftCollapsed ? 'balanced-layout-panel' : ''}`}
+          style={layout.leftCollapsed ? undefined : { width: `${layout.right}%` }}
         >
-          <button
-            className="right-fullscreen-toggle secondary-button"
-            onClick={() => setIsRightPanelFullscreen((current) => !current)}
-          >
-            {isRightPanelFullscreen ? '恢复布局' : '全屏展示'}
-          </button>
-          <div className="right-top" style={{ height: `${layout.rightTop}%` }}>
-            {rightTop}
+          <div className={`right-top ampere-overview ${isDataOverviewExpanded ? 'is-expanded' : 'is-collapsed'}`} style={isDataOverviewExpanded ? { height: `${layout.rightTop}%` } : undefined}>
+            <button
+              type="button"
+              className="ampere-overview-toggle"
+              onClick={() => setIsDataOverviewExpanded((current) => !current)}
+              aria-expanded={isDataOverviewExpanded}
+            >
+              <span>安培力的图示</span>
+              <span>{isDataOverviewExpanded ? '收起实时数据 ▲' : '展开实时数据 ▼'}</span>
+            </button>
+            {isDataOverviewExpanded && <div className="ampere-overview-body">{rightTop}</div>}
           </div>
-          <div
-            className="panel-resizer panel-resizer-y"
-            onPointerDown={startVerticalDrag}
-            role="separator"
-            aria-label="调整右侧上下高度"
-          />
-          <div className="right-bottom" style={{ height: `${layout.rightBottom}%` }}>
+          {isDataOverviewExpanded && (
+            <div
+              className="panel-resizer panel-resizer-y"
+              onPointerDown={startVerticalDrag}
+              role="separator"
+              aria-label="调整右侧上下高度"
+            />
+          )}
+          <div className="right-bottom" style={isDataOverviewExpanded ? { height: `${layout.rightBottom}%` } : { flex: '1 1 auto' }}>
             {rightBottom}
           </div>
         </div>

@@ -8,6 +8,8 @@ export interface ForceArrowOptions {
   origin?: THREE.Vector3;
   opacity?: number;
   labelOffset?: THREE.Vector3;
+  labelScale?: number;
+  arrowScale?: number;
 }
 
 export function createForceArrowGroup({
@@ -18,6 +20,8 @@ export function createForceArrowGroup({
   origin = new THREE.Vector3(0, 0, 0),
   opacity = 1,
   labelOffset = new THREE.Vector3(0, 0.12, 0),
+  labelScale = 1,
+  arrowScale = 1,
 }: ForceArrowOptions) {
   const group = new THREE.Group();
   const length = vector.length();
@@ -31,8 +35,16 @@ export function createForceArrowGroup({
     group.add(marker);
   } else {
     const direction = vector.clone().normalize();
-    const headLength = Math.min(0.28, Math.max(0.13, length * 0.18));
-    const headWidth = Math.min(0.18, Math.max(0.08, length * 0.11));
+    const headLength = Math.min(0.62, Math.max(0.13, length * 0.18) * arrowScale);
+    const headWidth = Math.min(0.48, Math.max(0.08, length * 0.11) * arrowScale);
+    const shaftLength = Math.max(0.01, length - headLength * 0.58);
+    const shaft = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.012 * arrowScale, 0.012 * arrowScale, shaftLength, 18),
+      new THREE.MeshBasicMaterial({ color, transparent: opacity < 1, opacity }),
+    );
+    shaft.position.copy(origin.clone().add(direction.clone().multiplyScalar(shaftLength / 2)));
+    shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+    group.add(shaft);
     const arrow = new THREE.ArrowHelper(direction, origin, length, color, headLength, headWidth);
     arrow.traverse((child) => applyOpacity(child, opacity));
     group.add(arrow);
@@ -40,6 +52,7 @@ export function createForceArrowGroup({
 
   const labelPosition = origin.clone().add(vector).add(labelOffset);
   const labelSprite = createTextSprite(`${label} = ${formatForce(valueN)} N`, color);
+  labelSprite.scale.multiplyScalar(labelScale);
   labelSprite.position.copy(labelPosition);
   group.add(labelSprite);
 
@@ -75,15 +88,16 @@ export function createTextSprite(text: string, color: string | number, backgroun
       roundRect(context, 12, 18, width - 24, height - 36, 18);
       context.fill();
     }
-    context.font = 'italic 700 48px "Times New Roman", "Microsoft YaHei", serif';
-    context.textAlign = 'center';
+    const segments = tokenizePhysicsText(text);
+    const totalWidth = measurePhysicsText(context, segments);
+    context.textAlign = 'left';
     context.textBaseline = 'middle';
     context.lineJoin = 'round';
     context.lineWidth = 8;
     context.strokeStyle = 'rgba(5, 10, 16, 0.82)';
-    context.strokeText(text, width / 2, height / 2 + 2);
+    drawPhysicsText(context, segments, (width - totalWidth) / 2, height / 2 + 2, true, color, background);
     context.fillStyle = background ? '#f7fbff' : toCssColor(color);
-    context.fillText(text, width / 2, height / 2 + 2);
+    drawPhysicsText(context, segments, (width - totalWidth) / 2, height / 2 + 2, false, color, background);
   }
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -129,6 +143,62 @@ function formatForce(value: number) {
 
 function toCssColor(color: string | number) {
   return typeof color === 'number' ? `#${color.toString(16).padStart(6, '0')}` : color;
+}
+
+interface TextSegment {
+  text: string;
+  subscript?: boolean;
+}
+
+function tokenizePhysicsText(text: string): TextSegment[] {
+  const segments: TextSegment[] = [];
+  const pattern = /F_(磁场力|[xyz])/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text))) {
+    if (match.index > cursor) segments.push({ text: text.slice(cursor, match.index) });
+    segments.push({ text: 'F' });
+    segments.push({ text: match[1], subscript: true });
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < text.length) segments.push({ text: text.slice(cursor) });
+  return segments;
+}
+
+function setSegmentFont(context: CanvasRenderingContext2D, subscript?: boolean) {
+  context.font = subscript
+    ? 'italic 700 30px "Times New Roman", "Microsoft YaHei", serif'
+    : 'italic 700 48px "Times New Roman", "Microsoft YaHei", serif';
+}
+
+function measurePhysicsText(context: CanvasRenderingContext2D, segments: TextSegment[]) {
+  return segments.reduce((width, segment) => {
+    setSegmentFont(context, segment.subscript);
+    return width + context.measureText(segment.text).width;
+  }, 0);
+}
+
+function drawPhysicsText(
+  context: CanvasRenderingContext2D,
+  segments: TextSegment[],
+  startX: number,
+  centerY: number,
+  stroke: boolean,
+  color: string | number,
+  background: string | null,
+) {
+  let x = startX;
+  segments.forEach((segment) => {
+    setSegmentFont(context, segment.subscript);
+    const y = centerY + (segment.subscript ? 15 : 0);
+    if (stroke) {
+      context.strokeText(segment.text, x, y);
+    } else {
+      context.fillStyle = background ? '#f7fbff' : toCssColor(color);
+      context.fillText(segment.text, x, y);
+    }
+    x += context.measureText(segment.text).width;
+  });
 }
 
 function roundRect(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {

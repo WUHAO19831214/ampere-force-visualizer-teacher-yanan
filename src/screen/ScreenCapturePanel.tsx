@@ -27,31 +27,10 @@ import { setScreenCaptureVideoElement } from './screenCaptureRuntime';
 
 const defaultRois: RoiConfig[] = [
   {
-    id: 'roi-time',
-    channelId: 'F1',
-    name: 'F1',
-    symbol: 'F1',
-    unit: 'N',
-    displayRoi: { x: 0.2, y: 0.42, width: 0.54, height: 0.08 },
-    ocrRoi: { x: 0.36, y: 0.435, width: 0.28, height: 0.05 },
-    decimalPlaces: 2,
-    sampleRateHz: 2,
-    recognizerMethod: 'tesseract',
-    preprocessMode: 'color-number',
-    roundingMode: 'round',
-    psmMode: 'SINGLE_LINE',
-    enableSmoothing: false,
-    enableOutlierFilter: true,
-    enabled: true,
-    minValue: -20,
-    maxValue: 20,
-    maxDeltaPerSample: 5,
-  },
-  {
-    id: 'roi-displacement',
-    channelId: 'F2',
-    name: 'F2',
-    symbol: 'F2',
+    id: 'roi-fy',
+    channelId: 'Fy',
+    name: 'Fy',
+    symbol: 'Fy',
     unit: 'N',
     displayRoi: { x: 0.2, y: 0.52, width: 0.54, height: 0.08 },
     ocrRoi: { x: 0.36, y: 0.535, width: 0.28, height: 0.05 },
@@ -69,10 +48,10 @@ const defaultRois: RoiConfig[] = [
     maxDeltaPerSample: 5,
   },
   {
-    id: 'roi-force',
-    channelId: 'F3',
-    name: 'F3',
-    symbol: 'F3',
+    id: 'roi-fz',
+    channelId: 'Fz',
+    name: 'Fz',
+    symbol: 'Fz',
     unit: 'N',
     displayRoi: { x: 0.2, y: 0.62, width: 0.54, height: 0.08 },
     ocrRoi: { x: 0.36, y: 0.635, width: 0.28, height: 0.05 },
@@ -153,12 +132,16 @@ export function ScreenCapturePanel() {
   useEffect(() => subscribeTesseractRuntimeStatus(setTesseractStatus), []);
 
   useEffect(() => {
-    if (!didInitializeRoisRef.current && store.screenRois.length === 0) {
+    if (didInitializeRoisRef.current) return;
+    const hasLegacyRois = store.screenRois.some((roi) => ['F1', 'F2', 'F3'].includes(roi.channelId));
+    const hasClassroomRois =
+      store.screenRois.some((roi) => roi.channelId === 'Fy') && store.screenRois.some((roi) => roi.channelId === 'Fz');
+    if (store.screenRois.length === 0 || hasLegacyRois || !hasClassroomRois) {
       didInitializeRoisRef.current = true;
       experimentDataActions.setScreenRois(defaultRois);
       experimentDataActions.setSelectedScreenRoiId(defaultRois[0].id);
     }
-  }, [store.screenRois.length]);
+  }, [store.screenRois]);
 
   const updateVideoSize = () => {
     const video = videoRef.current;
@@ -477,8 +460,8 @@ export function ScreenCapturePanel() {
     <section className="panel panel-screen">
       <div className="panel-titlebar">
         <div>
-          <h2>屏幕 ROI 数字读取区</h2>
-          <p>Screen Capture API 授权捕获窗口画面</p>
+          <h2>DIS实验数据读取区</h2>
+          <p>读取数字化实验软件中的实时力数据</p>
         </div>
       </div>
       <div className="toolbar screen-toolbar">
@@ -488,17 +471,6 @@ export function ScreenCapturePanel() {
         <button onClick={stopCapture} disabled={!isCapturing}>
           停止捕获
         </button>
-        <button onClick={addRoi}>添加 ROI</button>
-        <button onClick={() => experimentDataActions.setScreenRois([])}>清空 ROI</button>
-        <button onClick={() => setShowOcrRoi((value) => !value)}>{showOcrRoi ? '隐藏 OCR 内框' : '显示 OCR 内框'}</button>
-        <label className="toolbar-field">
-          屏幕显示模式
-          <select value={viewMode} onChange={(event) => setViewMode(event.target.value as ScreenViewMode)}>
-            <option value="contain">完整显示 contain</option>
-            <option value="cover">填满显示 cover</option>
-            <option value="manual-crop">手动裁剪 manual-crop</option>
-          </select>
-        </label>
       </div>
       <div className="media-stage screen-preview-fixed" ref={previewRef}>
         <video
@@ -539,18 +511,36 @@ export function ScreenCapturePanel() {
         />
       </div>
       <div className="screen-bottom-scroll">
-        <details className="config-drawer">
-          <summary>屏幕 ROI 配置</summary>
-          <RoiConfigPanel roi={selectedRoi} onChange={updateRoi} />
+        <details className="config-drawer advanced-classroom-tools">
+          <summary title="高级设置 / 调试工具">
+            <span className="sr-only">高级设置 / 调试工具</span>
+          </summary>
+          <div className="advanced-tool-row">
+            <button onClick={addRoi}>添加 ROI</button>
+            <button onClick={() => experimentDataActions.setScreenRois([])}>清空 ROI</button>
+            <button onClick={() => setShowOcrRoi((value) => !value)}>{showOcrRoi ? '隐藏 OCR 内框' : '显示 OCR 内框'}</button>
+            <label className="toolbar-field">
+              屏幕显示模式
+              <select value={viewMode} onChange={(event) => setViewMode(event.target.value as ScreenViewMode)}>
+                <option value="contain">完整显示 contain</option>
+                <option value="cover">填满显示 cover</option>
+                <option value="manual-crop">手动裁剪 manual-crop</option>
+              </select>
+            </label>
+          </div>
+          <details className="nested-debug-drawer">
+            <summary>屏幕 ROI 配置</summary>
+            <RoiConfigPanel roi={selectedRoi} onChange={updateRoi} />
+          </details>
+          <OcrDebugPanel
+            rois={rois}
+            debugByRoi={status.ocrDebugByRoi}
+            selectedId={selectedId}
+            tesseractStatus={tesseractStatus}
+            isTesting={isTestingOcr}
+            onTestCurrentRoi={testCurrentRoiOcr}
+          />
         </details>
-        <OcrDebugPanel
-          rois={rois}
-          debugByRoi={status.ocrDebugByRoi}
-          selectedId={selectedId}
-          tesseractStatus={tesseractStatus}
-          isTesting={isTestingOcr}
-          onTestCurrentRoi={testCurrentRoiOcr}
-        />
       </div>
     </section>
   );

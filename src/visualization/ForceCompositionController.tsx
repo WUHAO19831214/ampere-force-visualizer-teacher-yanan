@@ -9,12 +9,7 @@ interface ForceCompositionControllerProps {
   showResultant: boolean;
   showMagneticForce: boolean;
   showMagneticAngle: boolean;
-  magneticAngleText: string | null;
-  showCurrentAngle: boolean;
-  currentAngleText: string | null;
   currentDirectionSign: 1 | -1;
-  showIBPlane: boolean;
-  showLeftHandRule: boolean;
   includeLeftHandRuleInSnapshot: boolean;
   autoSnapshotEnabled: boolean;
   keySnapshots: KeySnapshot[];
@@ -33,16 +28,15 @@ interface ForceCompositionControllerProps {
   maxArrowLength: number;
   showFieldLines: boolean;
   magneticStatusText: string;
+  isViewLocked: boolean;
   onTogglePause: () => void;
   onCompose: () => void;
   onToggleResultOnly: () => void;
   onToggleResultant: () => void;
   onToggleMagneticForce: () => void;
   onToggleMagneticForceAngle: () => void;
-  onToggleCurrentMagneticForceAngle: () => void;
   onToggleCurrentDirection: () => void;
-  onToggleIBPlane: () => void;
-  onToggleLeftHandRule: () => void;
+  onToggleViewLock: () => void;
   onToggleIncludeLeftHandRule: () => void;
   onToggleAutoSnapshot: () => void;
   onManualSnapshot: () => void;
@@ -65,12 +59,7 @@ export function ForceCompositionController({
   showResultant,
   showMagneticForce,
   showMagneticAngle,
-  magneticAngleText,
-  showCurrentAngle,
-  currentAngleText,
   currentDirectionSign,
-  showIBPlane,
-  showLeftHandRule,
   includeLeftHandRuleInSnapshot,
   autoSnapshotEnabled,
   keySnapshots,
@@ -89,16 +78,15 @@ export function ForceCompositionController({
   maxArrowLength,
   showFieldLines,
   magneticStatusText,
+  isViewLocked,
   onTogglePause,
   onCompose,
   onToggleResultOnly,
   onToggleResultant,
   onToggleMagneticForce,
   onToggleMagneticForceAngle,
-  onToggleCurrentMagneticForceAngle,
   onToggleCurrentDirection,
-  onToggleIBPlane,
-  onToggleLeftHandRule,
+  onToggleViewLock,
   onToggleIncludeLeftHandRule,
   onToggleAutoSnapshot,
   onManualSnapshot,
@@ -112,8 +100,7 @@ export function ForceCompositionController({
   onLockScale,
   onResetScale,
 }: ForceCompositionControllerProps) {
-  const f12 = forces ? Math.sqrt(forces.f1 ** 2 + forces.f2 ** 2) : 0;
-  const resultant = forces ? Math.sqrt(forces.f1 ** 2 + forces.f2 ** 2 + forces.f3 ** 2) : 0;
+  const resultant = forces ? Math.sqrt(forces.fx ** 2 + forces.fy ** 2 + forces.fz ** 2) : 0;
 
   return (
     <div className="force-control-panel">
@@ -121,9 +108,6 @@ export function ForceCompositionController({
         <div className="force-summary-grid">
           <span>比例尺：1 N = {scaleFactor.toFixed(2)} 图示单位</span>
           <span>模式：{getScaleModeLabel(forceScaleMode)}</span>
-          <span>
-            <PhysicsSymbol symbol="F12" /> = {forces ? `${f12.toFixed(2)} N` : '-'}
-          </span>
           <span>
             <PhysicsSymbol symbol="F" /> = {forces ? `${resultant.toFixed(2)} N` : '-'}
           </span>
@@ -148,7 +132,7 @@ export function ForceCompositionController({
           {isHoldingFrame ? '开始' : '暂停'}
         </button>
         <button onClick={onCompose} disabled={!forces || animationRunning}>
-          三力合成
+          合力演示
         </button>
         <button className={showResultOnly ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleResultOnly} disabled={!forces}>
           {showResultOnly ? '退出仅合力' : '仅合力'}
@@ -161,44 +145,26 @@ export function ForceCompositionController({
         </button>
         <button className={showMagneticForce ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleMagneticForce}>
           {showMagneticForce ? '隐藏' : ''}
-          <PhysicsSymbol symbol="F" />磁场力
+          <PhysicsSymbol symbol="F磁场力" />
         </button>
         <button className="secondary-button" onClick={onToggleCurrentDirection}>
           <PhysicsSymbol symbol="I" />：{currentDirectionSign === 1 ? '+x' : '-x'}
         </button>
-        <button className={showIBPlane ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleIBPlane}>
-          {showIBPlane ? '隐藏 I-B 平面' : 'I-B 平面'}
-        </button>
-        <button className={showLeftHandRule ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleLeftHandRule}>
-          {showLeftHandRule ? '隐藏左手定则' : '左手定则'}
+        <button className={isViewLocked ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleViewLock}>
+          {isViewLocked ? '可旋转视角' : '固定视角'}
         </button>
         <div className="magnetic-angle-action">
           <button className={showMagneticAngle ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleMagneticForceAngle}>
             {showMagneticAngle ? (
               <>
-                隐藏<PhysicsSymbol symbol="B" />-<PhysicsSymbol symbol="F" />角
+                隐藏<PhysicsSymbol symbol="B" />-<PhysicsSymbol symbol="F磁场力" />角
               </>
             ) : (
               <>
-                <PhysicsSymbol symbol="B" />-<PhysicsSymbol symbol="F" />夹角
+                <PhysicsSymbol symbol="B" />-<PhysicsSymbol symbol="F磁场力" />夹角
               </>
             )}
           </button>
-          {magneticAngleText && <output className="magnetic-angle-result">{magneticAngleText}</output>}
-        </div>
-        <div className="magnetic-angle-action">
-          <button className={showCurrentAngle ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleCurrentMagneticForceAngle}>
-            {showCurrentAngle ? (
-              <>
-                隐藏<PhysicsSymbol symbol="I" />-<PhysicsSymbol symbol="F" />角
-              </>
-            ) : (
-              <>
-                <PhysicsSymbol symbol="I" />-<PhysicsSymbol symbol="F" />夹角
-              </>
-            )}
-          </button>
-          {currentAngleText && <output className="magnetic-angle-result">{currentAngleText}</output>}
         </div>
       </div>
       <details className="force-scale-settings">
@@ -303,12 +269,10 @@ function formatAngle(angle: number | undefined) {
 function getStateLabel(state: CompositionState, animationRunning: boolean, showResultOnly: boolean) {
   if (showResultOnly) return '仅显示合力';
   if (animationRunning) {
-    return state === 'compose12'
-      ? `正在合成 ${toUnicodePhysicsSymbol('F1')} + ${toUnicodePhysicsSymbol('F2')}`
-      : `正在合成 ${toUnicodePhysicsSymbol('F12')} + ${toUnicodePhysicsSymbol('F3')}`;
+    return state === 'compose12' ? `正在合成 ${toUnicodePhysicsSymbol('Fy')} 与 ${toUnicodePhysicsSymbol('Fz')}` : '正在显示合力';
   }
   if (state === 'result') return '合成结果';
-  return '实时三力图示';
+  return '实时力图示';
 }
 
 function getScaleModeLabel(mode: ForceScaleMode) {

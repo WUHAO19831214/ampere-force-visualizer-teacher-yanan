@@ -17,6 +17,25 @@ interface PhysicsSymbolProps {
 }
 
 export function PhysicsSymbol({ symbol, className }: PhysicsSymbolProps) {
+  const forceComponentMatch = symbol.match(/^F([xyz])$/i);
+  if (forceComponentMatch) {
+    return (
+      <span className={['physics-symbol', className].filter(Boolean).join(' ')}>
+        <span>F</span>
+        <sub>{forceComponentMatch[1].toLowerCase()}</sub>
+      </span>
+    );
+  }
+
+  if (symbol === 'F磁场力') {
+    return (
+      <span className={['physics-symbol', className].filter(Boolean).join(' ')}>
+        <span>F</span>
+        <sub>磁场力</sub>
+      </span>
+    );
+  }
+
   const parts = symbol.split(/(\d+)/).filter(Boolean);
   return (
     <span className={['physics-symbol', className].filter(Boolean).join(' ')}>
@@ -28,5 +47,9 @@ export function PhysicsSymbol({ symbol, className }: PhysicsSymbolProps) {
 }
 
 export function toUnicodePhysicsSymbol(symbol: string) {
+  if (/^Fx$/i.test(symbol)) return 'Fₓ';
+  if (/^Fy$/i.test(symbol)) return 'Fᵧ';
+  if (/^Fz$/i.test(symbol)) return 'Fᶻ';
+  if (symbol === 'F磁场力') return 'F_磁场力';
   return symbol.replace(/\d/g, (digit) => subscriptDigits[digit] ?? digit);
 }

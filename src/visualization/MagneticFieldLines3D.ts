@@ -1,42 +1,80 @@
 import * as THREE from 'three';
 import type { MagneticFieldConfig, MagneticFieldDetectionResult } from '../types/vision';
+import type { VisualizationTheme } from './ForceVisualization3D';
 import { createTextSprite } from './ForceArrow3D';
 
-const FIELD_COLOR = '#7ddff4';
 const WIRE_COLOR = '#d6dee8';
+const FIELD_LINE_SPACING_MULTIPLIER = 3;
+const FIELD_LINE_LENGTH_MULTIPLIER = 0.7;
+const FIELD_SIDE_AVOIDANCE_OFFSET = 0.22;
+
+const FIELD_THEME_COLORS = {
+  dark: {
+    line: '#7decff',
+    head: '#a0f5ff',
+    label: '#d8fbff',
+    shaftOpacity: 0.34,
+    arrowOpacity: 0.68,
+  },
+  light: {
+    line: '#0096b4',
+    head: '#0082a0',
+    label: '#075985',
+    shaftOpacity: 0.32,
+    arrowOpacity: 0.64,
+  },
+};
 
 export function createMagneticFieldLinesGroup(
   detection: MagneticFieldDetectionResult | undefined,
   config: MagneticFieldConfig,
+  theme: VisualizationTheme = 'dark',
 ) {
   const group = new THREE.Group();
+  const colors = FIELD_THEME_COLORS[theme];
   const wirePosition = new THREE.Vector3(...config.wirePosition3D);
   const direction = getMagneticFieldDirection3D(detection);
   const yzPerpendicular = new THREE.Vector3(0, -direction.z, direction.y).normalize();
   const wireAxisOffset = new THREE.Vector3(1, 0, 0);
   const count = Math.max(2, Math.min(12, config.fieldLineCount));
-  const length = Math.max(1.4, config.fieldLineLength);
-  const spacing = Math.max(0.12, config.fieldLineSpacing);
+  const length = Math.max(1.0, config.fieldLineLength * FIELD_LINE_LENGTH_MULTIPLIER);
+  const spacing = Math.max(0.12, config.fieldLineSpacing * FIELD_LINE_SPACING_MULTIPLIER);
+  const groupSideOffset = yzPerpendicular.clone().multiplyScalar(FIELD_SIDE_AVOIDANCE_OFFSET);
 
   addWireMarker(group, wirePosition);
 
   for (let index = 0; index < count; index += 1) {
     const centeredIndex = index - (count - 1) / 2;
-    const wireOffset = centeredIndex * Math.min(spacing * 0.42, 0.18);
-    const sideOffset = (index % 2 === 0 ? -0.5 : 0.5) * spacing * 0.45;
+    const wireOffset = centeredIndex * Math.min(spacing * 0.18, 0.22);
+    const sideOffset = centeredIndex * spacing * 0.26;
     const center = wirePosition
       .clone()
       .add(wireAxisOffset.clone().multiplyScalar(wireOffset))
-      .add(yzPerpendicular.clone().multiplyScalar(sideOffset));
+      .add(yzPerpendicular.clone().multiplyScalar(sideOffset))
+      .add(groupSideOffset);
     const start = center.clone().add(direction.clone().multiplyScalar(-length / 2));
-    const arrow = new THREE.ArrowHelper(direction, start, length, FIELD_COLOR, 0.2, 0.11);
-    setOpacity(arrow, 0.58);
+    const shaft = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.018, 0.018, length * 0.86, 14),
+      new THREE.MeshBasicMaterial({ color: colors.line, transparent: true, opacity: colors.shaftOpacity }),
+    );
+    shaft.position.copy(start.clone().add(direction.clone().multiplyScalar((length * 0.86) / 2)));
+    shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+    group.add(shaft);
+    const arrow = new THREE.ArrowHelper(direction, start, length, colors.head, 0.34, 0.2);
+    setOpacity(arrow, colors.arrowOpacity);
     group.add(arrow);
   }
 
-  const label = createTextSprite(detection?.fieldDirection2D ? '磁场 B' : '磁场 B（默认方向）', FIELD_COLOR);
-  label.scale.set(0.74, 0.2, 1);
-  label.position.copy(wirePosition.clone().add(direction.clone().multiplyScalar(length / 2 + 0.22)).add(new THREE.Vector3(0, 0.25, 0.2)));
+  const label = createTextSprite('B', colors.label);
+  label.scale.set(2.1, 0.58, 1);
+  label.position.copy(
+    wirePosition
+      .clone()
+      .add(groupSideOffset)
+      .add(yzPerpendicular.clone().multiplyScalar(spacing * 0.58))
+      .add(direction.clone().multiplyScalar(length * 0.34))
+      .add(new THREE.Vector3(0.18, 0.24, 0.12)),
+  );
   group.add(label);
 
   return group;
@@ -82,11 +120,6 @@ function addWireMarker(group: THREE.Group, position: THREE.Vector3) {
   wire.position.copy(position);
   wire.rotation.z = Math.PI / 2;
   group.add(wire);
-
-  const label = createTextSprite('导线 I', '#dbeafe');
-  label.scale.set(0.58, 0.18, 1);
-  label.position.copy(position.clone().add(new THREE.Vector3(0.16, -0.3, 0.24)));
-  group.add(label);
 }
 
 function setOpacity(object: THREE.Object3D, opacity: number) {

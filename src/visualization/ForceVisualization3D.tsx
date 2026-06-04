@@ -76,6 +76,9 @@ const MIN_VISIBLE_ARROW_LENGTH = 0.25;
 const AUTO_SCALE_SMOOTHING_WEIGHT = 0.2;
 const PERPENDICULAR_TOLERANCE_DEG = 8;
 const MAX_KEY_SNAPSHOTS = 6;
+// 课堂图示约定：x 轴正方向在当前默认视角中指向左下 / 观察者一侧。
+// Three.js scene X 的正方向与课堂图示相反，因此仅在渲染层取反。
+const SCENE_X_POSITIVE_SIGN = -1;
 const FORCE_VISUALIZATION_SPLIT_STORAGE_KEY = 'physics-force-visualization-split-ratio';
 const FORCE_READOUT_SIZE_STORAGE_KEY = 'physics-force-readout-size';
 const DEFAULT_VISUALIZATION_SPLIT_RATIO = 0.68;
@@ -791,7 +794,7 @@ function ForceSceneCanvas({
     const magneticFieldDirection = magneticDetection?.fieldDirection2D || (magneticDetection?.nPole && magneticDetection.sPole)
       ? getMagneticFieldDirection3D(magneticDetection)
       : null;
-    const currentDirection = new THREE.Vector3(currentDirectionSign, 0, 0);
+    const currentDirection = new THREE.Vector3(SCENE_X_POSITIVE_SIGN * currentDirectionSign, 0, 0);
 
     if (showIBPlane && magneticFieldDirection) {
       dynamicGroup.add(createIBPlaneGroup(currentDirection, magneticFieldDirection));
@@ -847,9 +850,9 @@ function createStaticScene(theme: VisualizationTheme) {
   grid.position.y = -0.01;
   group.add(grid);
 
-  group.add(createAxis('X', new THREE.Vector3(2.85, 0, 0), axisColor, new THREE.Vector3(0.16, 0.08, 0)));
-  group.add(createAxis('Z', new THREE.Vector3(0, 2.45, 0), axisColor, new THREE.Vector3(0.12, 0.08, 0)));
-  group.add(createAxis('Y', new THREE.Vector3(0, 0, 2.45), axisColor, new THREE.Vector3(0.14, 0.1, 0.12)));
+  group.add(createAxis('x', new THREE.Vector3(SCENE_X_POSITIVE_SIGN * 2.85, 0, 0), axisColor, new THREE.Vector3(SCENE_X_POSITIVE_SIGN * 0.16, 0.08, 0)));
+  group.add(createAxis('z', new THREE.Vector3(0, 2.45, 0), axisColor, new THREE.Vector3(0.12, 0.08, 0)));
+  group.add(createAxis('y', new THREE.Vector3(0, 0, 2.45), axisColor, new THREE.Vector3(0.14, 0.1, 0.12)));
 
   const rod = new THREE.Mesh(
     new THREE.CylinderGeometry(0.045, 0.045, 4.7, 24),
@@ -958,7 +961,7 @@ function createForceSceneGroup(
 function createSceneForceVectors(forces: ForceTriplet, scaleFactor: number) {
   // 课堂坐标：导体棒沿 x；水平垂直于导体棒为 y；竖直向上为 z。
   // Three.js 的 scene Y 是竖直方向，scene Z 是水平横向，因此这里只做渲染层映射。
-  const v1 = new THREE.Vector3(forces.fx * scaleFactor, 0, 0);
+  const v1 = new THREE.Vector3(SCENE_X_POSITIVE_SIGN * forces.fx * scaleFactor, 0, 0);
   const v2 = new THREE.Vector3(0, 0, forces.fy * scaleFactor);
   const v3 = new THREE.Vector3(0, forces.fz * scaleFactor, 0);
   const v12 = v1.clone().add(v2);
@@ -986,8 +989,9 @@ function createMagneticForceArrow(origin: THREE.Vector3, visibleResultant: THREE
 
 function createCurrentArrowGroup(currentDirectionSign: 1 | -1) {
   const group = new THREE.Group();
-  const origin = new THREE.Vector3(currentDirectionSign === 1 ? -0.82 : 0.82, 0.16, 0);
-  const vector = new THREE.Vector3(currentDirectionSign * 1.25, 0, 0);
+  const visualSign = SCENE_X_POSITIVE_SIGN * currentDirectionSign;
+  const origin = new THREE.Vector3(visualSign === 1 ? -0.82 : 0.82, 0.16, 0);
+  const vector = new THREE.Vector3(visualSign * 1.25, 0, 0);
   const direction = vector.clone().normalize();
   const shaft = new THREE.Mesh(
     new THREE.CylinderGeometry(0.032, 0.032, vector.length() * 0.78, 18),

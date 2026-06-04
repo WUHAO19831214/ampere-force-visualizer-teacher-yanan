@@ -10,6 +10,8 @@ const DEFAULT_FIELD_ROWS = 4;
 const DEFAULT_FIELD_COLS = 4;
 const DEFAULT_FIELD_X_SPACING = 0.76;
 const DEFAULT_FIELD_SIDE_SPACING = 0.76;
+// 与 ForceVisualization3D 的课堂图示约定一致：+x 在渲染层指向 scene -X。
+const SCENE_X_POSITIVE_SIGN = -1;
 
 const FIELD_THEME_COLORS = {
   dark: {
@@ -40,7 +42,7 @@ export function createMagneticFieldLinesGroup(
   const sideDirection = new THREE.Vector3(0, -direction.z, direction.y);
   if (sideDirection.length() < 0.001) sideDirection.set(0, 0, 1);
   sideDirection.normalize();
-  const xDirection = new THREE.Vector3(1, 0, 0);
+  const xDirection = new THREE.Vector3(SCENE_X_POSITIVE_SIGN, 0, 0);
   const rows = Math.max(1, Math.min(8, config.fieldLineRows ?? DEFAULT_FIELD_ROWS));
   const cols = Math.max(1, Math.min(8, config.fieldLineCols ?? DEFAULT_FIELD_COLS));
   const length = Math.max(1.0, config.fieldLineLength * FIELD_LINE_LENGTH_MULTIPLIER);

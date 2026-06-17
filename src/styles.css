@@ -1760,6 +1760,11 @@ button:disabled {
   max-width: 100%;
 }
 
+.snapshot-thumb-card {
+  position: relative;
+  min-width: 0;
+}
+
 .snapshot-thumb {
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr);
@@ -1769,6 +1774,35 @@ button:disabled {
   text-align: left;
   border-color: rgba(185, 205, 220, 0.28);
   background: #111b25;
+  width: 100%;
+}
+
+.snapshot-delete-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.58);
+  color: #fff;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.28);
+}
+
+.snapshot-delete-button:hover,
+.snapshot-delete-button:focus-visible {
+  background: rgba(220, 60, 60, 0.88);
+  outline: none;
 }
 
 .snapshot-thumb img {

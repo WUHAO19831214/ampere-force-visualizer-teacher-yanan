@@ -358,6 +358,17 @@ export function ForceVisualization3D() {
     snapshotCountersRef.current = { manual: 0, auto: 0 };
   };
 
+  const handleRemoveSnapshot = (snapshotId: string) => {
+    setKeySnapshots((current) => {
+      const nextSnapshots = current.filter((snapshot) => snapshot.id !== snapshotId);
+      if (nextSnapshots.length === 0) {
+        setShowSixSnapshotGrid(false);
+      }
+      return nextSnapshots;
+    });
+    setSelectedSnapshot((current) => (current?.id === snapshotId ? null : current));
+  };
+
   const handleScaleModeChange = (mode: ForceScaleMode) => {
     if (mode === 'locked') {
       setLockedForceScale(scaleFactor);
@@ -568,6 +579,7 @@ export function ForceVisualization3D() {
           onShowSixSnapshotGrid={() => setShowSixSnapshotGrid(true)}
           onSnapshotGalleryCountChange={setSnapshotGalleryCount}
           onSelectSnapshot={setSelectedSnapshot}
+          onRemoveSnapshot={handleRemoveSnapshot}
           onClearSnapshots={handleClearSnapshots}
           onToggleFieldLines={() => experimentDataActions.updateMagneticFieldConfig({ showFieldLines: !magneticFieldConfig.showFieldLines })}
           onScaleModeChange={handleScaleModeChange}

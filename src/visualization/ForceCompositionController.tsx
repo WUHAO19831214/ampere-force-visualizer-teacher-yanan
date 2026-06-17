@@ -42,6 +42,7 @@ interface ForceCompositionControllerProps {
   onShowSixSnapshotGrid: () => void;
   onSnapshotGalleryCountChange: (count: number) => void;
   onSelectSnapshot: (snapshot: KeySnapshot) => void;
+  onRemoveSnapshot: (snapshotId: string) => void;
   onClearSnapshots: () => void;
   onToggleFieldLines: () => void;
   onScaleModeChange: (mode: ForceScaleMode) => void;
@@ -92,6 +93,7 @@ export function ForceCompositionController({
   onShowSixSnapshotGrid,
   onSnapshotGalleryCountChange,
   onSelectSnapshot,
+  onRemoveSnapshot,
   onClearSnapshots,
   onToggleFieldLines,
   onScaleModeChange,
@@ -176,14 +178,25 @@ export function ForceCompositionController({
         <div className="snapshot-thumb-list">
           {keySnapshots.length === 0 && <p className="snapshot-empty-line">暂无关键图像。可手动截图，或开启自动截图记录满足垂直关系的关键画面。</p>}
           {keySnapshots.map((snapshot) => (
-            <button type="button" className="snapshot-thumb" key={snapshot.id} onClick={() => onSelectSnapshot(snapshot)}>
-              <img src={snapshot.imageDataUrl} alt={snapshot.name} />
-              <span>
-                <small className="snapshot-student-data">
-                  I: {snapshot.currentDirection ?? '--'} / α：{formatAngle(snapshot.alphaDeg)} / β：{formatAngle(snapshot.betaDeg)}
-                </small>
-              </span>
-            </button>
+            <div className="snapshot-thumb-card" key={snapshot.id}>
+              <button type="button" className="snapshot-thumb" onClick={() => onSelectSnapshot(snapshot)}>
+                <img src={snapshot.imageDataUrl} alt={snapshot.name} />
+                <span>
+                  <small className="snapshot-student-data">
+                    I: {snapshot.currentDirection ?? '--'} / α：{formatAngle(snapshot.alphaDeg)} / β：{formatAngle(snapshot.betaDeg)}
+                  </small>
+                </span>
+              </button>
+              <button
+                type="button"
+                className="snapshot-delete-button"
+                aria-label={`删除${snapshot.name}`}
+                title="删除这张关键图像"
+                onClick={() => onRemoveSnapshot(snapshot.id)}
+              >
+                ×
+              </button>
+            </div>
           ))}
         </div>
       </details>

@@ -56,20 +56,38 @@ export function createMagneticFieldLinesGroup(
   addWireMarker(group, wirePosition);
 
   if (options.singleArrowOnly) {
-    const singleLength = Math.max(0.9, Math.min(length * 0.76, 1.45));
+    const singleLength = Math.max(1.8, Math.min(length * 2.35, 3.25));
     const start = wirePosition.clone().add(direction.clone().multiplyScalar(-singleLength / 2));
-    const arrow = new THREE.ArrowHelper(direction, start, singleLength, colors.head, 0.3, 0.16);
-    setOpacity(arrow, clamp(colors.arrowOpacity, 0.58, 0.78));
-    group.add(arrow);
+    const shaftLength = singleLength * 0.82;
+    const shaftRadius = 0.056;
+    const shaft = new THREE.Mesh(
+      new THREE.CylinderGeometry(shaftRadius, shaftRadius, shaftLength, 18),
+      new THREE.MeshBasicMaterial({ color: colors.line, transparent: true, opacity: clamp(colors.arrowOpacity, 0.6, 0.82), depthWrite: false }),
+    );
+    shaft.position.copy(start.clone().add(direction.clone().multiplyScalar(shaftLength / 2)));
+    shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+    group.add(shaft);
+
+    const head = new THREE.Mesh(
+      new THREE.ConeGeometry(0.28, 0.55, 28),
+      new THREE.MeshBasicMaterial({ color: colors.head, transparent: true, opacity: clamp(colors.arrowOpacity + 0.08, 0.7, 0.9), depthWrite: false }),
+    );
+    head.position.copy(start.clone().add(direction.clone().multiplyScalar(singleLength - 0.28)));
+    head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+    group.add(head);
 
     const label = createTextSprite('B', colors.label);
-    label.scale.set(1.75, 0.48, 1);
+    label.scale.set(5.2, 1.42, 1);
+    const arrowTip = start.clone().add(direction.clone().multiplyScalar(singleLength));
+    const labelForwardOffset = Math.max(0.16, singleLength * 0.12);
+    const labelSideOffset = Math.max(0.14, sideSpacing * 0.36);
+    const labelXOffset = Math.max(0.08, xSpacing * 0.18);
     label.position.copy(
-      wirePosition
+      arrowTip
         .clone()
-        .add(direction.clone().multiplyScalar(singleLength * 0.52))
-        .add(sideDirection.clone().multiplyScalar(sideSpacing * 0.78))
-        .add(xDirection.clone().multiplyScalar(xSpacing * 0.48)),
+        .add(direction.clone().multiplyScalar(labelForwardOffset))
+        .add(sideDirection.clone().multiplyScalar(labelSideOffset))
+        .add(xDirection.clone().multiplyScalar(labelXOffset)),
     );
     group.add(label);
     return group;

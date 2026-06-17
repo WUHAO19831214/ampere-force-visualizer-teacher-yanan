@@ -78,8 +78,8 @@ const TARGET_MAX_ARROW_LENGTH = 3;
 const MIN_VISIBLE_ARROW_LENGTH = 0.25;
 const AUTO_SCALE_SMOOTHING_WEIGHT = 0.2;
 const PERPENDICULAR_TOLERANCE_DEG = 8;
-const MAX_KEY_SNAPSHOTS = 6;
-const MAX_SNAPSHOT_GRID_ITEMS = 4;
+const MAX_KEY_SNAPSHOTS = 10;
+const DEFAULT_SNAPSHOT_GALLERY_COUNT = 4;
 // 课堂图示约定：x 轴正方向在当前默认视角中指向左下 / 观察者一侧。
 // Three.js scene X 的正方向与课堂图示相反，因此仅在渲染层取反。
 const SCENE_X_POSITIVE_SIGN = -1;
@@ -124,6 +124,7 @@ export function ForceVisualization3D() {
   const [keySnapshots, setKeySnapshots] = useState<KeySnapshot[]>([]);
   const [selectedSnapshot, setSelectedSnapshot] = useState<KeySnapshot | null>(null);
   const [showSixSnapshotGrid, setShowSixSnapshotGrid] = useState(false);
+  const [snapshotGalleryCount, setSnapshotGalleryCount] = useState(DEFAULT_SNAPSHOT_GALLERY_COUNT);
   const [isSnapshotCaptureMode, setIsSnapshotCaptureMode] = useState(false);
   const [animationRunning, setAnimationRunning] = useState(false);
   const [compositionState, setCompositionState] = useState<CompositionState>('idle');
@@ -537,6 +538,7 @@ export function ForceVisualization3D() {
           includeLeftHandRuleInSnapshot={includeLeftHandRuleInSnapshot}
           autoSnapshotEnabled={autoSnapshotEnabled}
           keySnapshots={keySnapshots}
+          snapshotGalleryCount={snapshotGalleryCount}
           directionMetrics={directionMetrics}
           perpendicularToleranceDeg={PERPENDICULAR_TOLERANCE_DEG}
           animationRunning={animationRunning}
@@ -564,6 +566,7 @@ export function ForceVisualization3D() {
           onToggleAutoSnapshot={() => setAutoSnapshotEnabled((current) => !current)}
           onManualSnapshot={handleManualSnapshot}
           onShowSixSnapshotGrid={() => setShowSixSnapshotGrid(true)}
+          onSnapshotGalleryCountChange={setSnapshotGalleryCount}
           onSelectSnapshot={setSelectedSnapshot}
           onClearSnapshots={handleClearSnapshots}
           onToggleFieldLines={() => experimentDataActions.updateMagneticFieldConfig({ showFieldLines: !magneticFieldConfig.showFieldLines })}
@@ -575,7 +578,7 @@ export function ForceVisualization3D() {
         />
       </div>
       {selectedSnapshot && <SnapshotModal snapshot={selectedSnapshot} onClose={() => setSelectedSnapshot(null)} />}
-      {showSixSnapshotGrid && <SixSnapshotGrid snapshots={keySnapshots} onClose={() => setShowSixSnapshotGrid(false)} />}
+      {showSixSnapshotGrid && <SixSnapshotGrid snapshots={keySnapshots} count={snapshotGalleryCount} onClose={() => setShowSixSnapshotGrid(false)} />}
     </section>
   );
 }
@@ -600,21 +603,21 @@ function SnapshotModal({ snapshot, onClose }: { snapshot: KeySnapshot; onClose: 
   );
 }
 
-function SixSnapshotGrid({ snapshots, onClose }: { snapshots: KeySnapshot[]; onClose: () => void }) {
-  const visibleSnapshots = snapshots.slice(-MAX_SNAPSHOT_GRID_ITEMS);
+function SixSnapshotGrid({ snapshots, count, onClose }: { snapshots: KeySnapshot[]; count: number; onClose: () => void }) {
+  const visibleSnapshots = snapshots.slice(-count);
+  const layoutClass = count <= 2 ? 'two' : count <= 4 ? 'four' : count <= 6 ? 'six' : count <= 8 ? 'eight' : 'ten';
   return (
-    <div className="snapshot-modal-backdrop" role="dialog" aria-modal="true" aria-label="四图展示">
+    <div className="snapshot-modal-backdrop" role="dialog" aria-modal="true" aria-label="关键图像展示">
       <div className="six-snapshot-grid-modal">
         <div className="snapshot-modal-head">
           <div>
-            <h3>关键图像四图展示</h3>
-            <span>最多显示最近 4 张关键图像</span>
+            <h3>关键图像展示</h3>
           </div>
           <button type="button" onClick={onClose}>
             关闭
           </button>
         </div>
-        <div className="six-snapshot-grid">
+        <div className={`six-snapshot-grid snapshot-gallery-${layoutClass}`}>
           {visibleSnapshots.length === 0 && <p className="snapshot-empty">暂无关键图像记录。</p>}
           {visibleSnapshots.map((snapshot) => (
             <figure key={snapshot.id}>
@@ -898,6 +901,7 @@ function ForceSceneCanvas({
         showMagneticForce || snapshotMode,
         compositionState,
         animationProgress,
+        snapshotMode,
       );
       dynamicGroup.add(forceGroup);
 
@@ -1042,6 +1046,7 @@ function createForceSceneGroup(
   showMagneticForce: boolean,
   compositionState: CompositionState,
   animationProgress: number,
+  snapshotMode = false,
 ) {
   const group = new THREE.Group();
   const origin = new THREE.Vector3(0, 0, 0);
@@ -1058,7 +1063,7 @@ function createForceSceneGroup(
       group.add(createForceArrowGroup({ label: 'F', valueN: fMagnitude, vector: visibleVF, color: RESULT_COLOR, origin, labelOffset: new THREE.Vector3(0.14, 0.2, 0.14), arrowScale: 2.4, labelScale: 2.4 }));
     }
     if (showMagneticForce) {
-      group.add(createMagneticForceArrow(origin, visibleVF, fMagnitude));
+      group.add(createMagneticForceArrow(origin, visibleVF, fMagnitude, snapshotMode));
     }
     return group;
   }
@@ -1090,7 +1095,7 @@ function createForceSceneGroup(
     if (showResultant && compositionState === 'idle') {
       group.add(createForceArrowGroup({ label: 'F', valueN: fMagnitude, vector: visibleVF, color: RESULT_COLOR, origin, labelOffset: new THREE.Vector3(0.14, 0.24, 0.14), arrowScale: 2.5, labelScale: 2.3 }));
     }
-    group.add(createMagneticForceArrow(origin, visibleVF, fMagnitude));
+    group.add(createMagneticForceArrow(origin, visibleVF, fMagnitude, snapshotMode));
   }
 
   return group;
@@ -1112,7 +1117,7 @@ function createSceneForceVectors(forces: ForceTriplet, scaleFactor: number) {
   };
 }
 
-function createMagneticForceArrow(origin: THREE.Vector3, visibleResultant: THREE.Vector3, magnitudeN: number) {
+function createMagneticForceArrow(origin: THREE.Vector3, visibleResultant: THREE.Vector3, magnitudeN: number, snapshotMode = false) {
   return createForceArrowGroup({
     label: 'F_安培力',
     valueN: magnitudeN,
@@ -1122,6 +1127,7 @@ function createMagneticForceArrow(origin: THREE.Vector3, visibleResultant: THREE
     labelOffset: new THREE.Vector3(-0.18, 0.2, -0.14),
     arrowScale: 3,
     labelScale: 2.8,
+    showValue: !snapshotMode,
   });
 }
 
@@ -1272,9 +1278,9 @@ function createSnapshotAngleGuideGroup(metrics: DirectionMetrics, theme: Visuali
   if (metrics.magneticFieldDirection) {
     const alpha = computeClockwiseAngleToPositiveY(metrics.magneticFieldDirection);
     if (alpha !== null) {
-      group.add(createClockwiseAngleArc(origin, alpha, radiusAlpha, alphaColor));
+      group.add(createClockwiseAngleArc(origin, alpha, radiusAlpha, alphaColor, 0.026));
       const label = createTextSprite(`∠α = ${alpha.toFixed(1)}°`, alphaColor);
-      label.scale.set(1.22, 0.34, 1);
+      label.scale.set(3.65, 1.02, 1);
       label.position.copy(pointOnClassroomAngle(origin, alpha / 2, radiusAlpha + 0.22));
       group.add(label);
     }
@@ -1283,9 +1289,9 @@ function createSnapshotAngleGuideGroup(metrics: DirectionMetrics, theme: Visuali
   if (metrics.magneticForceDirection) {
     const beta = computeClockwiseAngleToPositiveY(metrics.magneticForceDirection);
     if (beta !== null) {
-      group.add(createClockwiseAngleArc(origin, beta, radiusBeta, betaColor));
+      group.add(createClockwiseAngleArc(origin, beta, radiusBeta, betaColor, 0.028));
       const label = createTextSprite(`∠β = ${beta.toFixed(1)}°`, betaColor);
-      label.scale.set(1.22, 0.34, 1);
+      label.scale.set(3.65, 1.02, 1);
       label.position.copy(pointOnClassroomAngle(origin, beta / 2, radiusBeta + 0.24));
       group.add(label);
     }
@@ -1310,16 +1316,16 @@ function createAngleGuideLine(origin: THREE.Vector3, direction: THREE.Vector3, l
   return group;
 }
 
-function createClockwiseAngleArc(origin: THREE.Vector3, angleDeg: number, radius: number, color: string) {
+function createClockwiseAngleArc(origin: THREE.Vector3, angleDeg: number, radius: number, color: string, thickness = 0.009) {
   const pointCount = Math.max(12, Math.ceil(angleDeg / 8));
   const points: THREE.Vector3[] = [];
   for (let index = 0; index <= pointCount; index += 1) {
     const t = index / pointCount;
     points.push(pointOnClassroomAngle(origin, angleDeg * (1 - t), radius));
   }
-  const arc = new THREE.Line(
-    new THREE.BufferGeometry().setFromPoints(points),
-    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false }),
+  const arc = new THREE.Mesh(
+    new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), Math.max(8, pointCount), thickness, 8, false),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false }),
   );
   arc.renderOrder = 12;
   return arc;

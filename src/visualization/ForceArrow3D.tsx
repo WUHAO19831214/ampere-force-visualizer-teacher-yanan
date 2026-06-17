@@ -10,6 +10,7 @@ export interface ForceArrowOptions {
   labelOffset?: THREE.Vector3;
   labelScale?: number;
   arrowScale?: number;
+  showValue?: boolean;
 }
 
 export function createForceArrowGroup({
@@ -22,6 +23,7 @@ export function createForceArrowGroup({
   labelOffset = new THREE.Vector3(0, 0.12, 0),
   labelScale = 1,
   arrowScale = 1,
+  showValue = true,
 }: ForceArrowOptions) {
   const group = new THREE.Group();
   const length = vector.length();
@@ -51,7 +53,7 @@ export function createForceArrowGroup({
   }
 
   const labelPosition = origin.clone().add(vector).add(labelOffset);
-  const labelSprite = createTextSprite(`${label} = ${formatForce(valueN)} N`, color);
+  const labelSprite = createTextSprite(showValue ? `${label} = ${formatForce(valueN)} N` : label, color);
   labelSprite.scale.multiplyScalar(labelScale);
   labelSprite.position.copy(labelPosition);
   group.add(labelSprite);

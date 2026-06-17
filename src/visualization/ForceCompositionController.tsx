@@ -12,6 +12,7 @@ interface ForceCompositionControllerProps {
   includeLeftHandRuleInSnapshot: boolean;
   autoSnapshotEnabled: boolean;
   keySnapshots: KeySnapshot[];
+  snapshotGalleryCount: number;
   directionMetrics: DirectionMetrics | null;
   perpendicularToleranceDeg: number;
   animationRunning: boolean;
@@ -39,6 +40,7 @@ interface ForceCompositionControllerProps {
   onToggleAutoSnapshot: () => void;
   onManualSnapshot: () => void;
   onShowSixSnapshotGrid: () => void;
+  onSnapshotGalleryCountChange: (count: number) => void;
   onSelectSnapshot: (snapshot: KeySnapshot) => void;
   onClearSnapshots: () => void;
   onToggleFieldLines: () => void;
@@ -60,6 +62,7 @@ export function ForceCompositionController({
   includeLeftHandRuleInSnapshot,
   autoSnapshotEnabled,
   keySnapshots,
+  snapshotGalleryCount,
   directionMetrics,
   perpendicularToleranceDeg,
   animationRunning,
@@ -87,6 +90,7 @@ export function ForceCompositionController({
   onToggleAutoSnapshot,
   onManualSnapshot,
   onShowSixSnapshotGrid,
+  onSnapshotGalleryCountChange,
   onSelectSnapshot,
   onClearSnapshots,
   onToggleFieldLines,
@@ -153,8 +157,17 @@ export function ForceCompositionController({
           <button type="button" className={includeLeftHandRuleInSnapshot ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleIncludeLeftHandRule}>
             截图含左手：{includeLeftHandRuleInSnapshot ? '开' : '关'}
           </button>
+          <label className="snapshot-gallery-count" title="选择多图展示数量">
+            <select value={snapshotGalleryCount} onChange={(event) => onSnapshotGalleryCountChange(Number(event.target.value))}>
+              {[2, 4, 6, 8, 10].map((count) => (
+                <option key={count} value={count}>
+                  {count}
+                </option>
+              ))}
+            </select>
+          </label>
           <button type="button" onClick={onShowSixSnapshotGrid} disabled={keySnapshots.length === 0}>
-            四图展示
+            多图展示
           </button>
           <button type="button" className="secondary-button" onClick={onClearSnapshots} disabled={keySnapshots.length === 0}>
             清空记录

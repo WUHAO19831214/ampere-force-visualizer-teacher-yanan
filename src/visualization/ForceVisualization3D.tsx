@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
+import type { CSSProperties, MutableRefObject, PointerEvent as ReactPointerEvent } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useExperimentDataStore } from '../store/useExperimentDataStore';
@@ -45,6 +45,9 @@ export interface KeySnapshot {
     angleBF?: number;
     angleIF?: number;
   };
+  currentDirection: '+x' | '-x';
+  alphaDeg: number | null;
+  betaDeg: number | null;
   perpendicularPassed: boolean;
 }
 
@@ -76,9 +79,13 @@ const MIN_VISIBLE_ARROW_LENGTH = 0.25;
 const AUTO_SCALE_SMOOTHING_WEIGHT = 0.2;
 const PERPENDICULAR_TOLERANCE_DEG = 8;
 const MAX_KEY_SNAPSHOTS = 6;
+const MAX_SNAPSHOT_GRID_ITEMS = 4;
 // 课堂图示约定：x 轴正方向在当前默认视角中指向左下 / 观察者一侧。
 // Three.js scene X 的正方向与课堂图示相反，因此仅在渲染层取反。
 const SCENE_X_POSITIVE_SIGN = -1;
+const ZY_VIEW_CAMERA_POSITION = new THREE.Vector3(-6, 0, 0);
+const ZY_VIEW_CAMERA_TARGET = new THREE.Vector3(0, 0.12, 0);
+const ZY_VIEW_CAMERA_UP = new THREE.Vector3(0, 1, 0);
 const FORCE_VISUALIZATION_SPLIT_STORAGE_KEY = 'physics-force-visualization-split-ratio';
 const FORCE_READOUT_SIZE_STORAGE_KEY = 'physics-force-readout-size';
 const DEFAULT_VISUALIZATION_SPLIT_RATIO = 0.68;
@@ -109,6 +116,7 @@ export function ForceVisualization3D() {
   const [showLeftHandRule, setShowLeftHandRule] = useState(false);
   const [visualizationTheme, setVisualizationTheme] = useState<VisualizationTheme>('dark');
   const [isViewLocked, setIsViewLocked] = useState(true);
+  const [isZyViewActive, setIsZyViewActive] = useState(false);
   const [isSceneFullscreen, setIsSceneFullscreen] = useState(false);
   const [readoutSize, setReadoutSize] = useState<ForceReadoutSize>(readStoredReadoutSize);
   const [includeLeftHandRuleInSnapshot, setIncludeLeftHandRuleInSnapshot] = useState(false);
@@ -116,6 +124,7 @@ export function ForceVisualization3D() {
   const [keySnapshots, setKeySnapshots] = useState<KeySnapshot[]>([]);
   const [selectedSnapshot, setSelectedSnapshot] = useState<KeySnapshot | null>(null);
   const [showSixSnapshotGrid, setShowSixSnapshotGrid] = useState(false);
+  const [isSnapshotCaptureMode, setIsSnapshotCaptureMode] = useState(false);
   const [animationRunning, setAnimationRunning] = useState(false);
   const [compositionState, setCompositionState] = useState<CompositionState>('idle');
   const [animationProgress, setAnimationProgress] = useState(0);
@@ -278,6 +287,14 @@ export function ForceVisualization3D() {
     setCurrentDirectionSign((current) => (current === 1 ? -1 : 1));
   };
 
+  const handleToggleZyView = () => {
+    setIsZyViewActive((current) => {
+      const next = !current;
+      setIsViewLocked(next);
+      return next;
+    });
+  };
+
   const captureKeySnapshot = async (source: 'manual' | 'auto') => {
     if (!activeForces || !directionMetrics || !canvasRef.current) return;
     const temporarilyShowLeftHandRule = includeLeftHandRuleInSnapshot && !showLeftHandRule;
@@ -286,8 +303,17 @@ export function ForceVisualization3D() {
       await waitForNextFrame();
     }
 
-    const imageDataUrl = canvasRef.current.toDataURL('image/png');
-    if (temporarilyShowLeftHandRule) setShowLeftHandRule(false);
+    let imageDataUrl = '';
+    try {
+      setIsSnapshotCaptureMode(true);
+      await waitForNextFrame();
+      await waitForNextFrame();
+      imageDataUrl = canvasRef.current.toDataURL('image/png');
+    } finally {
+      setIsSnapshotCaptureMode(false);
+      if (temporarilyShowLeftHandRule) setShowLeftHandRule(false);
+    }
+    if (!imageDataUrl) return;
     snapshotCountersRef.current[source] += 1;
     const snapshot: KeySnapshot = {
       id: `${source}-${Date.now()}`,
@@ -311,6 +337,9 @@ export function ForceVisualization3D() {
         angleBF: directionMetrics.angleBF,
         angleIF: directionMetrics.angleIF,
       },
+      currentDirection: currentDirectionSign === 1 ? '+x' : '-x',
+      alphaDeg: computeClockwiseAngleToPositiveY(directionMetrics.magneticFieldDirection),
+      betaDeg: computeClockwiseAngleToPositiveY(directionMetrics.magneticForceDirection),
       perpendicularPassed: directionMetrics.perpendicularPassed,
     };
 
@@ -413,8 +442,11 @@ export function ForceVisualization3D() {
           currentDirectionSign={currentDirectionSign}
           showIBPlane={showIBPlane}
           showLeftHandRule={showLeftHandRule}
+          snapshotMode={isSnapshotCaptureMode}
+          directionMetrics={directionMetrics}
           visualizationTheme={visualizationTheme}
           isViewLocked={isViewLocked}
+          isZyViewActive={isZyViewActive}
           onCanvasReady={(canvas) => {
             canvasRef.current = canvas;
           }}
@@ -437,7 +469,7 @@ export function ForceVisualization3D() {
                 </span>
                 {showMagneticForce && (
                   <span>
-                    <PhysicsSymbol symbol="F磁场力" /> = {directionMetrics?.fMagneticMagnitude.toFixed(2) ?? '--'} N
+                    <PhysicsSymbol symbol="F安培力" /> = {directionMetrics?.fMagneticMagnitude.toFixed(2) ?? '--'} N
                   </span>
                 )}
                 {showMagneticAngle && (
@@ -446,7 +478,7 @@ export function ForceVisualization3D() {
                       'B-F夹角：等待数据'
                     ) : (
                       <>
-                        ∠(<PhysicsSymbol symbol="B" />, <PhysicsSymbol symbol="F磁场力" />) = {magneticAngleValue.toFixed(1)}°
+                        ∠(<PhysicsSymbol symbol="B" />, <PhysicsSymbol symbol="F安培力" />) = {magneticAngleValue.toFixed(1)}°
                       </>
                     )}
                   </strong>
@@ -518,6 +550,7 @@ export function ForceVisualization3D() {
           maxArrowLength={maxArrowLength}
           showFieldLines={magneticFieldConfig.showFieldLines}
           isViewLocked={isViewLocked}
+          isZyViewActive={isZyViewActive}
           onTogglePause={handleTogglePause}
           onCompose={handleCompose}
           onToggleResultOnly={handleToggleResultOnly}
@@ -526,6 +559,7 @@ export function ForceVisualization3D() {
           onToggleMagneticForceAngle={handleToggleMagneticForceAngle}
           onToggleCurrentDirection={handleToggleCurrentDirection}
           onToggleViewLock={() => setIsViewLocked((current) => !current)}
+          onToggleZyView={handleToggleZyView}
           onToggleIncludeLeftHandRule={() => setIncludeLeftHandRuleInSnapshot((current) => !current)}
           onToggleAutoSnapshot={() => setAutoSnapshotEnabled((current) => !current)}
           onManualSnapshot={handleManualSnapshot}
@@ -567,14 +601,14 @@ function SnapshotModal({ snapshot, onClose }: { snapshot: KeySnapshot; onClose: 
 }
 
 function SixSnapshotGrid({ snapshots, onClose }: { snapshots: KeySnapshot[]; onClose: () => void }) {
-  const visibleSnapshots = snapshots.slice(-MAX_KEY_SNAPSHOTS);
+  const visibleSnapshots = snapshots.slice(-MAX_SNAPSHOT_GRID_ITEMS);
   return (
-    <div className="snapshot-modal-backdrop" role="dialog" aria-modal="true" aria-label="六图展示">
+    <div className="snapshot-modal-backdrop" role="dialog" aria-modal="true" aria-label="四图展示">
       <div className="six-snapshot-grid-modal">
         <div className="snapshot-modal-head">
           <div>
-            <h3>关键图像六图展示</h3>
-            <span>最多显示最近 6 张关键图像</span>
+            <h3>关键图像四图展示</h3>
+            <span>最多显示最近 4 张关键图像</span>
           </div>
           <button type="button" onClick={onClose}>
             关闭
@@ -586,12 +620,10 @@ function SixSnapshotGrid({ snapshots, onClose }: { snapshots: KeySnapshot[]; onC
             <figure key={snapshot.id}>
               <img src={snapshot.imageDataUrl} alt={snapshot.name} />
               <figcaption>
-                <strong>{snapshot.name}</strong>
-                <span>{formatSnapshotTime(snapshot.createdAt)}</span>
-                <span>
-                  B-F：{formatAngleValue(snapshot.angles.angleBF)} / I-F：{formatAngleValue(snapshot.angles.angleIF)}
+                <span className="snapshot-student-data">
+                  I: {snapshot.currentDirection ?? '--'} / α：{formatAngleValue(snapshot.alphaDeg)} / β：
+                  {formatAngleValue(snapshot.betaDeg)}
                 </span>
-                <span>{snapshot.perpendicularPassed ? '垂直性判断：通过' : '垂直性判断：未满足'}</span>
               </figcaption>
             </figure>
           ))}
@@ -613,20 +645,32 @@ function SnapshotMetadata({ snapshot }: { snapshot: KeySnapshot }) {
         <dd>{snapshot.perpendicularPassed ? '通过' : '未满足'}</dd>
       </div>
       <div>
+        <dt>电流方向</dt>
+        <dd>I: {snapshot.currentDirection ?? '--'}</dd>
+      </div>
+      <div>
+        <dt>∠α</dt>
+        <dd>{formatAngleValue(snapshot.alphaDeg)}</dd>
+      </div>
+      <div>
+        <dt>∠β</dt>
+        <dd>{formatAngleValue(snapshot.betaDeg)}</dd>
+      </div>
+      <div>
         <dt>
-          <PhysicsSymbol symbol="F磁场力" />
+          <PhysicsSymbol symbol="F安培力" />
         </dt>
         <dd>{snapshot.forces.fMagneticMagnitude.toFixed(2)} N</dd>
       </div>
       <div>
         <dt>
-          ∠(<PhysicsSymbol symbol="B" />, <PhysicsSymbol symbol="F磁场力" />)
+          ∠(<PhysicsSymbol symbol="B" />, <PhysicsSymbol symbol="F安培力" />)
         </dt>
         <dd>{formatAngleValue(snapshot.angles.angleBF)}</dd>
       </div>
       <div>
         <dt>
-          ∠(<PhysicsSymbol symbol="I" />, <PhysicsSymbol symbol="F磁场力" />)
+          ∠(<PhysicsSymbol symbol="I" />, <PhysicsSymbol symbol="F安培力" />)
         </dt>
         <dd>{formatAngleValue(snapshot.angles.angleIF)}</dd>
       </div>
@@ -655,9 +699,19 @@ interface ForceSceneCanvasProps {
   currentDirectionSign: 1 | -1;
   showIBPlane: boolean;
   showLeftHandRule: boolean;
+  snapshotMode: boolean;
+  directionMetrics: DirectionMetrics | null;
   visualizationTheme: VisualizationTheme;
   isViewLocked: boolean;
+  isZyViewActive: boolean;
   onCanvasReady?: (canvas: HTMLCanvasElement | null) => void;
+}
+
+interface CameraState {
+  position: THREE.Vector3;
+  target: THREE.Vector3;
+  up: THREE.Vector3;
+  zoom: number;
 }
 
 function ForceSceneCanvas({
@@ -674,8 +728,11 @@ function ForceSceneCanvas({
   currentDirectionSign,
   showIBPlane,
   showLeftHandRule,
+  snapshotMode,
+  directionMetrics,
   visualizationTheme,
   isViewLocked,
+  isZyViewActive,
   onCanvasReady,
 }: ForceSceneCanvasProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
@@ -684,6 +741,8 @@ function ForceSceneCanvas({
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const dynamicGroupRef = useRef<THREE.Group | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
+  const previousCameraStateRef = useRef<CameraState | null>(null);
+  const cameraAnimationFrameRef = useRef(0);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -706,9 +765,7 @@ function ForceSceneCanvas({
     controls.enableRotate = true;
     controls.enableZoom = true;
     controls.enablePan = true;
-    controls.enableRotate = !isViewLocked;
-    controls.enableZoom = !isViewLocked;
-    controls.enablePan = !isViewLocked;
+    applyCameraControlMode(controls, isViewLocked, isZyViewActive);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.rotateSpeed = 0.7;
@@ -755,6 +812,7 @@ function ForceSceneCanvas({
 
     return () => {
       cancelAnimationFrame(renderFrame);
+      cancelAnimationFrame(cameraAnimationFrameRef.current);
       observer.disconnect();
       controls.dispose();
       disposeObject3D(scene);
@@ -772,11 +830,41 @@ function ForceSceneCanvas({
   useEffect(() => {
     const controls = controlsRef.current;
     if (!controls) return;
-    controls.enableRotate = !isViewLocked;
-    controls.enableZoom = !isViewLocked;
-    controls.enablePan = !isViewLocked;
+    applyCameraControlMode(controls, isViewLocked, isZyViewActive);
     controls.update();
-  }, [isViewLocked]);
+  }, [isViewLocked, isZyViewActive]);
+
+  useEffect(() => {
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    if (!camera || !controls) return;
+
+    if (isZyViewActive) {
+      previousCameraStateRef.current = {
+        position: camera.position.clone(),
+        target: controls.target.clone(),
+        up: camera.up.clone(),
+        zoom: camera.zoom,
+      };
+      animateCameraState(
+        camera,
+        controls,
+        {
+          position: ZY_VIEW_CAMERA_POSITION,
+          target: ZY_VIEW_CAMERA_TARGET,
+          up: ZY_VIEW_CAMERA_UP,
+          zoom: camera.zoom,
+        },
+        cameraAnimationFrameRef,
+      );
+      return;
+    }
+
+    if (previousCameraStateRef.current) {
+      animateCameraState(camera, controls, previousCameraStateRef.current, cameraAnimationFrameRef);
+      previousCameraStateRef.current = null;
+    }
+  }, [isZyViewActive]);
 
   useEffect(() => {
     const dynamicGroup = dynamicGroupRef.current;
@@ -785,8 +873,8 @@ function ForceSceneCanvas({
     disposeObject3D(dynamicGroup);
     dynamicGroup.clear();
 
-    if (magneticFieldConfig.showFieldLines) {
-      dynamicGroup.add(createMagneticFieldLinesGroup(magneticDetection, magneticFieldConfig, visualizationTheme));
+    if (magneticFieldConfig.showFieldLines || snapshotMode) {
+      dynamicGroup.add(createMagneticFieldLinesGroup(magneticDetection, magneticFieldConfig, visualizationTheme, { singleArrowOnly: snapshotMode }));
     }
 
     dynamicGroup.add(createCurrentArrowGroup(currentDirectionSign));
@@ -807,13 +895,16 @@ function ForceSceneCanvas({
         minVisibleArrowLength,
         showResultOnly,
         showResultant,
-        showMagneticForce,
+        showMagneticForce || snapshotMode,
         compositionState,
         animationProgress,
       );
       dynamicGroup.add(forceGroup);
 
       const magneticForceDirection = createSceneForceVectors(forces, 1).resultant.clone().multiplyScalar(-1);
+      if (snapshotMode && directionMetrics) {
+        dynamicGroup.add(createSnapshotAngleGuideGroup(directionMetrics, visualizationTheme));
+      }
       if (showLeftHandRule && magneticFieldDirection && magneticForceDirection.length() > 0.0001) {
         dynamicGroup.add(createLeftHandRuleGroup(currentDirection, magneticFieldDirection, magneticForceDirection.normalize()));
       }
@@ -827,6 +918,8 @@ function ForceSceneCanvas({
     magneticFieldConfig,
     minVisibleArrowLength,
     scaleFactor,
+    snapshotMode,
+    directionMetrics,
     showIBPlane,
     showLeftHandRule,
     showMagneticForce,
@@ -836,6 +929,51 @@ function ForceSceneCanvas({
   ]);
 
   return <div ref={mountRef} className="force-three-canvas" aria-label="立体图示与合成演示模块" />;
+}
+
+function applyCameraControlMode(controls: OrbitControls, isViewLocked: boolean, isZyViewActive: boolean) {
+  if (isZyViewActive) {
+    controls.enableRotate = false;
+    controls.enableZoom = true;
+    controls.enablePan = false;
+    return;
+  }
+
+  controls.enableRotate = !isViewLocked;
+  controls.enableZoom = !isViewLocked;
+  controls.enablePan = !isViewLocked;
+}
+
+function animateCameraState(
+  camera: THREE.PerspectiveCamera,
+  controls: OrbitControls,
+  targetState: CameraState,
+  frameRef: MutableRefObject<number>,
+) {
+  cancelAnimationFrame(frameRef.current);
+  const startPosition = camera.position.clone();
+  const startTarget = controls.target.clone();
+  const startUp = camera.up.clone();
+  const startZoom = camera.zoom;
+  const startedAt = performance.now();
+  const durationMs = 720;
+
+  const tick = (now: number) => {
+    const rawProgress = clamp((now - startedAt) / durationMs, 0, 1);
+    const progress = 1 - (1 - rawProgress) ** 3;
+    camera.position.copy(startPosition.clone().lerp(targetState.position, progress));
+    controls.target.copy(startTarget.clone().lerp(targetState.target, progress));
+    camera.up.copy(startUp.clone().lerp(targetState.up, progress).normalize());
+    camera.zoom = startZoom + (targetState.zoom - startZoom) * progress;
+    camera.updateProjectionMatrix();
+    controls.update();
+
+    if (rawProgress < 1) {
+      frameRef.current = requestAnimationFrame(tick);
+    }
+  };
+
+  frameRef.current = requestAnimationFrame(tick);
 }
 
 function createStaticScene(theme: VisualizationTheme) {
@@ -976,7 +1114,7 @@ function createSceneForceVectors(forces: ForceTriplet, scaleFactor: number) {
 
 function createMagneticForceArrow(origin: THREE.Vector3, visibleResultant: THREE.Vector3, magnitudeN: number) {
   return createForceArrowGroup({
-    label: 'F_磁场力',
+    label: 'F_安培力',
     valueN: magnitudeN,
     vector: visibleResultant.clone().multiplyScalar(-1),
     color: MAGNETIC_FORCE_COLOR,
@@ -1119,12 +1257,101 @@ function createLeftHandRuleGroup(
   return group;
 }
 
+function createSnapshotAngleGuideGroup(metrics: DirectionMetrics, theme: VisualizationTheme) {
+  const group = new THREE.Group();
+  const referenceColor = theme === 'light' ? '#64748b' : '#d6e2ee';
+  const alphaColor = theme === 'light' ? '#0082a0' : '#9df4ff';
+  const betaColor = theme === 'light' ? '#d9480f' : '#ff8f73';
+  const origin = new THREE.Vector3(0.08, 0, 0);
+  const positiveY = new THREE.Vector3(0, 0, 1);
+  const radiusAlpha = 0.72;
+  const radiusBeta = 1.05;
+
+  group.add(createAngleGuideLine(origin, positiveY, 1.34, referenceColor, '+y'));
+
+  if (metrics.magneticFieldDirection) {
+    const alpha = computeClockwiseAngleToPositiveY(metrics.magneticFieldDirection);
+    if (alpha !== null) {
+      group.add(createClockwiseAngleArc(origin, alpha, radiusAlpha, alphaColor));
+      const label = createTextSprite(`∠α = ${alpha.toFixed(1)}°`, alphaColor);
+      label.scale.set(1.22, 0.34, 1);
+      label.position.copy(pointOnClassroomAngle(origin, alpha / 2, radiusAlpha + 0.22));
+      group.add(label);
+    }
+  }
+
+  if (metrics.magneticForceDirection) {
+    const beta = computeClockwiseAngleToPositiveY(metrics.magneticForceDirection);
+    if (beta !== null) {
+      group.add(createClockwiseAngleArc(origin, beta, radiusBeta, betaColor));
+      const label = createTextSprite(`∠β = ${beta.toFixed(1)}°`, betaColor);
+      label.scale.set(1.22, 0.34, 1);
+      label.position.copy(pointOnClassroomAngle(origin, beta / 2, radiusBeta + 0.24));
+      group.add(label);
+    }
+  }
+
+  return group;
+}
+
+function createAngleGuideLine(origin: THREE.Vector3, direction: THREE.Vector3, length: number, color: string, label: string) {
+  const group = new THREE.Group();
+  const normalized = direction.clone().normalize();
+  const geometry = new THREE.BufferGeometry().setFromPoints([origin, origin.clone().add(normalized.clone().multiplyScalar(length))]);
+  const line = new THREE.Line(
+    geometry,
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.78, depthWrite: false }),
+  );
+  group.add(line);
+  const sprite = createTextSprite(label, color);
+  sprite.scale.set(0.55, 0.16, 1);
+  sprite.position.copy(origin.clone().add(normalized.multiplyScalar(length + 0.16)));
+  group.add(sprite);
+  return group;
+}
+
+function createClockwiseAngleArc(origin: THREE.Vector3, angleDeg: number, radius: number, color: string) {
+  const pointCount = Math.max(12, Math.ceil(angleDeg / 8));
+  const points: THREE.Vector3[] = [];
+  for (let index = 0; index <= pointCount; index += 1) {
+    const t = index / pointCount;
+    points.push(pointOnClassroomAngle(origin, angleDeg * (1 - t), radius));
+  }
+  const arc = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(points),
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false }),
+  );
+  arc.renderOrder = 12;
+  return arc;
+}
+
+function pointOnClassroomAngle(origin: THREE.Vector3, angleDeg: number, radius: number) {
+  const rad = THREE.MathUtils.degToRad(angleDeg);
+  return origin.clone().add(new THREE.Vector3(0, Math.sin(rad) * radius, Math.cos(rad) * radius));
+}
+
 export function computeAngleBetweenVectors(a: [number, number, number], b: [number, number, number]) {
   const vectorA = new THREE.Vector3(...a);
   const vectorB = new THREE.Vector3(...b);
   if (vectorA.length() < 0.0001 || vectorB.length() < 0.0001) return null;
   const dot = clamp(vectorA.normalize().dot(vectorB.normalize()), -1, 1);
   return (Math.acos(dot) * 180) / Math.PI;
+}
+
+function computeClockwiseAngleToPositiveY(direction?: [number, number, number]) {
+  if (!direction) return null;
+  const vector = new THREE.Vector3(...direction);
+  if (vector.length() < 0.0001) return null;
+  // 渲染层中 scene Z 对应课堂 +y，scene Y 对应课堂 +z。
+  // 在 Z-Y 正视图中，以 +y 为水平向右、+z 为竖直向上。
+  const classroomY = vector.z;
+  const classroomZ = vector.y;
+  if (Math.hypot(classroomY, classroomZ) < 0.0001) return null;
+  return normalizeDegrees((Math.atan2(classroomZ, classroomY) * 180) / Math.PI);
+}
+
+function normalizeDegrees(angle: number) {
+  return ((angle % 360) + 360) % 360;
 }
 
 function getDirectionMetrics(
@@ -1161,11 +1388,11 @@ function getDirectionMetrics(
     Math.abs(angleIF - 90) <= toleranceDeg &&
     Math.abs(angleBF - 90) <= toleranceDeg;
   const perpendicularMessage = !magneticForceDirection
-    ? '垂直性判断：缺少有效 F磁场力'
+    ? '垂直性判断：缺少有效 F安培力'
     : !magneticFieldDirection
       ? '垂直性判断：等待摄像头磁场方向'
       : perpendicularPassed
-        ? '垂直性判断：通过，F磁场力近似垂直于 I-B 平面'
+        ? '垂直性判断：通过，F安培力近似垂直于 I-B 平面'
         : `垂直性判断：未满足，需同时接近 90°±${toleranceDeg}°`;
 
   return {
@@ -1270,7 +1497,7 @@ function formatSnapshotTime(timestamp: number) {
   return new Date(timestamp).toLocaleTimeString();
 }
 
-function formatAngleValue(angle: number | undefined) {
+function formatAngleValue(angle: number | null | undefined) {
   return typeof angle === 'number' ? `${angle.toFixed(1)}°` : '--';
 }
 

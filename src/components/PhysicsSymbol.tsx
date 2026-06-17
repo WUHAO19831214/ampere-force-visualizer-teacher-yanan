@@ -27,11 +27,11 @@ export function PhysicsSymbol({ symbol, className }: PhysicsSymbolProps) {
     );
   }
 
-  if (symbol === 'F磁场力') {
+  if (symbol === 'F磁场力' || symbol === 'F安培力') {
     return (
       <span className={['physics-symbol', className].filter(Boolean).join(' ')}>
         <span>F</span>
-        <sub>磁场力</sub>
+        <sub>安培力</sub>
       </span>
     );
   }
@@ -50,6 +50,6 @@ export function toUnicodePhysicsSymbol(symbol: string) {
   if (/^Fx$/i.test(symbol)) return 'Fₓ';
   if (/^Fy$/i.test(symbol)) return 'Fᵧ';
   if (/^Fz$/i.test(symbol)) return 'Fᶻ';
-  if (symbol === 'F磁场力') return 'F_磁场力';
+  if (symbol === 'F磁场力' || symbol === 'F安培力') return 'F_安培力';
   return symbol.replace(/\d/g, (digit) => subscriptDigits[digit] ?? digit);
 }

@@ -34,6 +34,7 @@ export function createMagneticFieldLinesGroup(
   detection: MagneticFieldDetectionResult | undefined,
   config: MagneticFieldConfig,
   theme: VisualizationTheme = 'dark',
+  options: { simplified?: boolean; singleArrowOnly?: boolean } = {},
 ) {
   const group = new THREE.Group();
   const colors = FIELD_THEME_COLORS[theme];
@@ -43,7 +44,7 @@ export function createMagneticFieldLinesGroup(
   if (sideDirection.length() < 0.001) sideDirection.set(0, 0, 1);
   sideDirection.normalize();
   const xDirection = new THREE.Vector3(SCENE_X_POSITIVE_SIGN, 0, 0);
-  const rows = Math.max(1, Math.min(8, config.fieldLineRows ?? DEFAULT_FIELD_ROWS));
+  const rows = options.simplified ? 1 : Math.max(1, Math.min(8, config.fieldLineRows ?? DEFAULT_FIELD_ROWS));
   const cols = Math.max(1, Math.min(8, config.fieldLineCols ?? DEFAULT_FIELD_COLS));
   const length = Math.max(1.0, config.fieldLineLength * FIELD_LINE_LENGTH_MULTIPLIER);
   const legacySpacing = Math.max(0.12, config.fieldLineSpacing * FIELD_LINE_SPACING_MULTIPLIER);
@@ -53,6 +54,26 @@ export function createMagneticFieldLinesGroup(
   const arrowOpacity = clamp(shaftOpacity + 0.18, 0.42, colors.arrowOpacity);
 
   addWireMarker(group, wirePosition);
+
+  if (options.singleArrowOnly) {
+    const singleLength = Math.max(0.9, Math.min(length * 0.76, 1.45));
+    const start = wirePosition.clone().add(direction.clone().multiplyScalar(-singleLength / 2));
+    const arrow = new THREE.ArrowHelper(direction, start, singleLength, colors.head, 0.3, 0.16);
+    setOpacity(arrow, clamp(colors.arrowOpacity, 0.58, 0.78));
+    group.add(arrow);
+
+    const label = createTextSprite('B', colors.label);
+    label.scale.set(1.75, 0.48, 1);
+    label.position.copy(
+      wirePosition
+        .clone()
+        .add(direction.clone().multiplyScalar(singleLength * 0.52))
+        .add(sideDirection.clone().multiplyScalar(sideSpacing * 0.78))
+        .add(xDirection.clone().multiplyScalar(xSpacing * 0.48)),
+    );
+    group.add(label);
+    return group;
+  }
 
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < cols; col += 1) {

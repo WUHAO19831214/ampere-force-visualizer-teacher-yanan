@@ -152,7 +152,7 @@ interface TextSegment {
 
 function tokenizePhysicsText(text: string): TextSegment[] {
   const segments: TextSegment[] = [];
-  const pattern = /F_(磁场力|[xyz])/g;
+  const pattern = /F_(安培力|磁场力|[xyz])/g;
   let cursor = 0;
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(text))) {

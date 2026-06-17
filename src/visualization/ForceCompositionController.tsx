@@ -25,6 +25,7 @@ interface ForceCompositionControllerProps {
   maxArrowLength: number;
   showFieldLines: boolean;
   isViewLocked: boolean;
+  isZyViewActive: boolean;
   onTogglePause: () => void;
   onCompose: () => void;
   onToggleResultOnly: () => void;
@@ -33,6 +34,7 @@ interface ForceCompositionControllerProps {
   onToggleMagneticForceAngle: () => void;
   onToggleCurrentDirection: () => void;
   onToggleViewLock: () => void;
+  onToggleZyView: () => void;
   onToggleIncludeLeftHandRule: () => void;
   onToggleAutoSnapshot: () => void;
   onManualSnapshot: () => void;
@@ -71,6 +73,7 @@ export function ForceCompositionController({
   maxArrowLength,
   showFieldLines,
   isViewLocked,
+  isZyViewActive,
   onTogglePause,
   onCompose,
   onToggleResultOnly,
@@ -79,6 +82,7 @@ export function ForceCompositionController({
   onToggleMagneticForceAngle,
   onToggleCurrentDirection,
   onToggleViewLock,
+  onToggleZyView,
   onToggleIncludeLeftHandRule,
   onToggleAutoSnapshot,
   onManualSnapshot,
@@ -112,7 +116,7 @@ export function ForceCompositionController({
         </button>
         <button className={showMagneticForce ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleMagneticForce}>
           {showMagneticForce ? '隐藏' : ''}
-          <PhysicsSymbol symbol="F磁场力" />
+          <PhysicsSymbol symbol="F安培力" />
         </button>
         <button className="secondary-button" onClick={onToggleCurrentDirection}>
           <PhysicsSymbol symbol="I" />：{currentDirectionSign === 1 ? '+x' : '-x'}
@@ -120,15 +124,18 @@ export function ForceCompositionController({
         <button className={isViewLocked ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleViewLock}>
           {isViewLocked ? '可旋转视角' : '固定视角'}
         </button>
+        <button className={isZyViewActive ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleZyView}>
+          {isZyViewActive ? '恢复立体视角' : 'Z-Y 正视图'}
+        </button>
         <div className="magnetic-angle-action">
           <button className={showMagneticAngle ? 'secondary-button is-active' : 'secondary-button'} onClick={onToggleMagneticForceAngle}>
             {showMagneticAngle ? (
               <>
-                隐藏<PhysicsSymbol symbol="B" />-<PhysicsSymbol symbol="F磁场力" />角
+                隐藏<PhysicsSymbol symbol="B" />-<PhysicsSymbol symbol="F安培力" />角
               </>
             ) : (
               <>
-                <PhysicsSymbol symbol="B" />-<PhysicsSymbol symbol="F磁场力" />夹角
+                <PhysicsSymbol symbol="B" />-<PhysicsSymbol symbol="F安培力" />夹角
               </>
             )}
           </button>
@@ -147,7 +154,7 @@ export function ForceCompositionController({
             截图含左手：{includeLeftHandRuleInSnapshot ? '开' : '关'}
           </button>
           <button type="button" onClick={onShowSixSnapshotGrid} disabled={keySnapshots.length === 0}>
-            六图展示
+            四图展示
           </button>
           <button type="button" className="secondary-button" onClick={onClearSnapshots} disabled={keySnapshots.length === 0}>
             清空记录
@@ -159,12 +166,9 @@ export function ForceCompositionController({
             <button type="button" className="snapshot-thumb" key={snapshot.id} onClick={() => onSelectSnapshot(snapshot)}>
               <img src={snapshot.imageDataUrl} alt={snapshot.name} />
               <span>
-                <strong>{snapshot.name}</strong>
-                <small>
-                  {new Date(snapshot.createdAt).toLocaleTimeString()} · B-F {formatAngle(snapshot.angles.angleBF)} · I-F{' '}
-                  {formatAngle(snapshot.angles.angleIF)}
+                <small className="snapshot-student-data">
+                  I: {snapshot.currentDirection ?? '--'} / α：{formatAngle(snapshot.alphaDeg)} / β：{formatAngle(snapshot.betaDeg)}
                 </small>
-                <small>{snapshot.perpendicularPassed ? '垂直性：通过' : '垂直性：未满足'}</small>
               </span>
             </button>
           ))}
@@ -230,6 +234,6 @@ function PerpendicularStatus({ metrics, toleranceDeg }: { metrics: DirectionMetr
   );
 }
 
-function formatAngle(angle: number | undefined) {
+function formatAngle(angle: number | null | undefined) {
   return typeof angle === 'number' ? `${angle.toFixed(1)}°` : '--';
 }

@@ -102,15 +102,15 @@ button:disabled {
 .school-title-block h1 {
   margin: 0;
   color: #111827;
-  font-size: 28px;
+  font-size: 30px;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.08;
 }
 
 .school-title-block p {
-  margin: 7px 0 0;
+  margin: 4px 0 0;
   color: #111827;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
 }
 
@@ -1783,6 +1783,15 @@ button:disabled {
   font-size: 10px;
 }
 
+.snapshot-thumb .snapshot-student-data {
+  color: #f3f7fb;
+  font-family: "Times New Roman", Times, serif;
+  font-style: italic;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 .snapshot-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1861,9 +1870,9 @@ button:disabled {
 
 .six-snapshot-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  padding: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 14px;
 }
 
 .six-snapshot-grid figure {
@@ -1883,16 +1892,20 @@ button:disabled {
 }
 
 .six-snapshot-grid figcaption {
-  display: grid;
-  gap: 3px;
-  padding: 8px;
-  color: #b9c7d4;
-  font-size: 11px;
+  padding: 12px;
+  color: #f3f7fb;
 }
 
-.six-snapshot-grid figcaption strong {
+.six-snapshot-grid .snapshot-student-data {
+  display: block;
   color: #f3f7fb;
-  font-size: 12px;
+  font-family: "Times New Roman", Times, serif;
+  font-style: italic;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.28;
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.72);
 }
 
 .ghost-button {

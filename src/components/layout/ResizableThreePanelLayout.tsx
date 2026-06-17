@@ -79,8 +79,8 @@ export function ResizableThreePanelLayout({ left, middle, rightTop, rightBottom 
         <div className="school-brand">
           <img src={schoolLogo} className="school-logo" alt="上海市延安中学校徽" />
           <div className="school-title-block">
-            <h1>安培力可视化平台</h1>
-            <p>上海市延安中学</p>
+            <h1>上海市延安中学</h1>
+            <p>安培力可视化平台</p>
           </div>
         </div>
         <button className="ghost-button" onClick={resetLayout}>

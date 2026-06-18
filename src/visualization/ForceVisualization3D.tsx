@@ -664,11 +664,11 @@ function SnapshotMetadata({ snapshot }: { snapshot: KeySnapshot }) {
         <dd>I: {snapshot.currentDirection ?? '--'}</dd>
       </div>
       <div>
-        <dt>∠α</dt>
+        <dt>α</dt>
         <dd>{formatAngleValue(snapshot.alphaDeg)}</dd>
       </div>
       <div>
-        <dt>∠β</dt>
+        <dt>β</dt>
         <dd>{formatAngleValue(snapshot.betaDeg)}</dd>
       </div>
       <div>
@@ -1291,7 +1291,7 @@ function createSnapshotAngleGuideGroup(metrics: DirectionMetrics, theme: Visuali
     const alpha = computeClockwiseAngleToPositiveY(metrics.magneticFieldDirection);
     if (alpha !== null) {
       group.add(createClockwiseAngleArc(origin, alpha, radiusAlpha, alphaColor, 0.026));
-      const label = createTextSprite(`∠α = ${alpha.toFixed(1)}°`, alphaColor);
+      const label = createTextSprite(`α = ${alpha.toFixed(1)}°`, alphaColor);
       label.scale.set(3.65, 1.02, 1);
       label.position.copy(pointOnClassroomAngle(origin, alpha / 2, radiusAlpha + 0.22));
       group.add(label);
@@ -1302,7 +1302,7 @@ function createSnapshotAngleGuideGroup(metrics: DirectionMetrics, theme: Visuali
     const beta = computeClockwiseAngleToPositiveY(metrics.magneticForceDirection);
     if (beta !== null) {
       group.add(createClockwiseAngleArc(origin, beta, radiusBeta, betaColor, 0.028));
-      const label = createTextSprite(`∠β = ${beta.toFixed(1)}°`, betaColor);
+      const label = createTextSprite(`β = ${beta.toFixed(1)}°`, betaColor);
       label.scale.set(3.65, 1.02, 1);
       label.position.copy(pointOnClassroomAngle(origin, beta / 2, radiusBeta + 0.24));
       group.add(label);

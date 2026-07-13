@@ -1,12 +1,31 @@
-# Physics Multi-Source Experiment Bridge
+# 安培力教师端：多源实验数据与三维可视化
 
-中文名：物理实验多源数据采集与三维可视化平台
+英文定位：Ampere Force Teacher Visualizer for Shanghai Yanan High School
 
 这是一个面向高中物理课堂实验的网页 MVP。第一版目标是跑通：
 
 屏幕捕获 → ROI 区域框选 → 数字识别接口 → 实时数据面板 → 数据存储 → CSV 导出  
 摄像头捕获 → 实验画面显示 → 视觉分析 ROI → Mock 视觉数据 → CSV 导出  
 右侧下方基于 F1、F2、F3 的三力立体图示与合成演示
+
+## 研究定位与证据边界
+
+本仓库是教师课堂端原型，目标是把实验软件屏幕读数、摄像头视觉信息和三维物理模型组织在同一界面中。它采用“屏幕感知式桥接”：经用户授权捕获 DIS 软件窗口，再对可见数字区域做 OCR；它不是朗威 DIS 的内部数据接口，也不直接访问传感器驱动或私有协议。
+
+研究记录中建议使用三类来源标签：
+
+- **实测后显示的数据**：DIS 力传感器产生、由原软件显示、再经 OCR 转录的数值；
+- **视觉识别的数据**：摄像头中红色 N 极、蓝色 S 极等标记推断出的方向；
+- **程序建模的数据**：由数值、方向和坐标约定生成的三维箭头、角度、合力和判定。
+
+## 研究型文档
+
+- [教师课堂工作流](docs/TEACHER_WORKFLOW.md)
+- [数据管线与来源分层](docs/DATA_PIPELINE.md)
+- [OCR 与 ROI 校准](docs/OCR_AND_ROI.md)
+- [DIS 与传感器接入说明](docs/SENSOR_INTEGRATION.md)
+- [课堂教学方案](docs/CLASSROOM_LESSON.md)
+- [验证报告与证据状态](docs/VALIDATION_REPORT.md)
 
 ## 运行方法
 

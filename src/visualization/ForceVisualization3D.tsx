@@ -636,8 +636,18 @@ function SixSnapshotGrid({ snapshots, count, onClose }: { snapshots: KeySnapshot
               <img src={snapshot.imageDataUrl} alt={snapshot.name} />
               <figcaption>
                 <span className="snapshot-student-data">
-                  I: {snapshot.currentDirection ?? '--'} / α：{formatAngleValue(snapshot.alphaDeg)} / β：
-                  {formatAngleValue(snapshot.betaDeg)}
+                  {count === 8 ? (
+                    <>
+                      <span>I: {snapshot.currentDirection ?? '--'}</span>
+                      <span>α：{formatAngleValue(snapshot.alphaDeg)}</span>
+                      <span>β：{formatAngleValue(snapshot.betaDeg)}</span>
+                    </>
+                  ) : (
+                    <>
+                      I: {snapshot.currentDirection ?? '--'} / α：{formatAngleValue(snapshot.alphaDeg)} / β：
+                      {formatAngleValue(snapshot.betaDeg)}
+                    </>
+                  )}
                 </span>
               </figcaption>
             </figure>

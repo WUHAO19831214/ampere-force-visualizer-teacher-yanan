@@ -1998,16 +1998,23 @@ button:disabled {
 
 .six-snapshot-grid.snapshot-gallery-eight {
   grid-template-columns: repeat(4, minmax(300px, 1fr));
-  grid-template-rows: repeat(2, minmax(430px, 1fr));
+  grid-template-rows: repeat(2, minmax(540px, 1fr));
 }
 
-.snapshot-gallery-eight figure {
+.six-snapshot-grid.snapshot-gallery-four {
+  grid-template-columns: repeat(2, minmax(300px, 1fr));
+  grid-template-rows: repeat(2, minmax(620px, 1fr));
+}
+
+.snapshot-gallery-eight figure,
+.snapshot-gallery-four figure {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
-.snapshot-gallery-eight img {
+.snapshot-gallery-eight img,
+.snapshot-gallery-four img {
   flex: 1 1 0;
   min-height: 0;
   height: 0;
@@ -2015,18 +2022,21 @@ button:disabled {
   object-fit: contain;
 }
 
-.snapshot-gallery-eight figcaption {
+.snapshot-gallery-eight figcaption,
+.snapshot-gallery-four figcaption {
   flex: 0 0 auto;
   padding: 8px 10px 12px;
   transform: none;
 }
 
-.snapshot-gallery-eight .snapshot-student-data {
+.snapshot-gallery-eight .snapshot-student-data,
+.snapshot-gallery-four .snapshot-student-data {
   font-size: 60px;
   line-height: 1.15;
 }
 
-.snapshot-gallery-eight .snapshot-student-data > span {
+.snapshot-gallery-eight .snapshot-student-data > span,
+.snapshot-gallery-four .snapshot-student-data > span {
   display: block;
   white-space: nowrap;
 }

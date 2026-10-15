@@ -138,7 +138,7 @@ export function ForceVisualization3D() {
   const [visualizationSplitRatio, setVisualizationSplitRatio] = useState(readStoredVisualizationSplitRatio);
   const autoScaleInitializedRef = useRef(false);
   const visualizationPanelRef = useRef<HTMLElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const snapshotRendererRef = useRef<(() => string) | null>(null);
   const lastAutoSnapshotAtRef = useRef(0);
   const snapshotCountersRef = useRef({ manual: 0, auto: 0 });
 
@@ -297,7 +297,7 @@ export function ForceVisualization3D() {
   };
 
   const captureKeySnapshot = async (source: 'manual' | 'auto') => {
-    if (!activeForces || !directionMetrics || !canvasRef.current) return;
+    if (!activeForces || !directionMetrics || !snapshotRendererRef.current) return;
     const temporarilyShowLeftHandRule = includeLeftHandRuleInSnapshot && !showLeftHandRule;
     if (includeLeftHandRuleInSnapshot && !showLeftHandRule) {
       setShowLeftHandRule(true);
@@ -309,7 +309,7 @@ export function ForceVisualization3D() {
       setIsSnapshotCaptureMode(true);
       await waitForNextFrame();
       await waitForNextFrame();
-      imageDataUrl = canvasRef.current.toDataURL('image/png');
+      imageDataUrl = snapshotRendererRef.current();
     } finally {
       setIsSnapshotCaptureMode(false);
       if (temporarilyShowLeftHandRule) setShowLeftHandRule(false);
@@ -459,8 +459,8 @@ export function ForceVisualization3D() {
           visualizationTheme={visualizationTheme}
           isViewLocked={isViewLocked}
           isZyViewActive={isZyViewActive}
-          onCanvasReady={(canvas) => {
-            canvasRef.current = canvas;
+          onSnapshotRendererReady={(renderSnapshot) => {
+            snapshotRendererRef.current = renderSnapshot;
           }}
         />
         <div className="force-scene-overlay">
@@ -636,7 +636,7 @@ function SixSnapshotGrid({ snapshots, count, onClose }: { snapshots: KeySnapshot
               <img src={snapshot.imageDataUrl} alt={snapshot.name} />
               <figcaption>
                 <span className="snapshot-student-data">
-                  {count === 8 ? (
+                  {count === 4 || count === 8 ? (
                     <>
                       <span>I: {snapshot.currentDirection ?? '--'}</span>
                       <span>α：{formatAngleValue(snapshot.alphaDeg)}</span>
@@ -729,7 +729,7 @@ interface ForceSceneCanvasProps {
   visualizationTheme: VisualizationTheme;
   isViewLocked: boolean;
   isZyViewActive: boolean;
-  onCanvasReady?: (canvas: HTMLCanvasElement | null) => void;
+  onSnapshotRendererReady?: (renderSnapshot: (() => string) | null) => void;
 }
 
 interface CameraState {
@@ -758,7 +758,7 @@ function ForceSceneCanvas({
   visualizationTheme,
   isViewLocked,
   isZyViewActive,
-  onCanvasReady,
+  onSnapshotRendererReady,
 }: ForceSceneCanvasProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -783,7 +783,7 @@ function ForceSceneCanvas({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     mount.appendChild(renderer.domElement);
-    onCanvasReady?.(renderer.domElement);
+    onSnapshotRendererReady?.(() => renderKeySnapshot(renderer, scene, camera, visualizationTheme));
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(0, 0.2, 0);
@@ -843,7 +843,7 @@ function ForceSceneCanvas({
       disposeObject3D(scene);
       renderer.dispose();
       renderer.domElement.remove();
-      onCanvasReady?.(null);
+      onSnapshotRendererReady?.(null);
       sceneRef.current = null;
       cameraRef.current = null;
       rendererRef.current = null;
@@ -928,6 +928,12 @@ function ForceSceneCanvas({
       dynamicGroup.add(forceGroup);
 
       const magneticForceDirection = createSceneForceVectors(forces, 1).resultant.clone().multiplyScalar(-1);
+      dynamicGroup.userData.snapshotAngles = directionMetrics
+        ? {
+            alpha: computeClockwiseAngleToPositiveY(directionMetrics.magneticFieldDirection),
+            beta: computeClockwiseAngleToPositiveY(directionMetrics.magneticForceDirection),
+          }
+        : null;
       if (snapshotMode && directionMetrics) {
         dynamicGroup.add(createSnapshotAngleGuideGroup(directionMetrics, visualizationTheme));
       }
@@ -955,6 +961,78 @@ function ForceSceneCanvas({
   ]);
 
   return <div ref={mountRef} className="force-three-canvas" aria-label="立体图示与合成演示模块" />;
+}
+
+function renderKeySnapshot(
+  renderer: THREE.WebGLRenderer,
+  scene: THREE.Scene,
+  liveCamera: THREE.PerspectiveCamera,
+  theme: VisualizationTheme,
+) {
+  // Export at a fixed resolution rather than stretching the small live preview.
+  const width = 1200;
+  const height = 900;
+  const labelHeight = 140;
+  const camera = liveCamera.clone();
+  camera.aspect = width / (height - labelHeight);
+  camera.zoom = 1;
+  camera.updateProjectionMatrix();
+  const target = new THREE.Vector3(0, 0.12, 0);
+  const rotation = camera.quaternion.clone().invert();
+  const tanY = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const tanX = tanY * camera.aspect;
+  let distance = 0;
+  scene.updateMatrixWorld(true);
+  scene.traverse((object) => {
+    if (!(object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Sprite)) return;
+    const bounds = new THREE.Box3().setFromObject(object);
+    // Text sprites have large transparent margins in their canvas textures.
+    if (object instanceof THREE.Sprite) bounds.expandByScalar(-Math.min(object.scale.x, object.scale.y) * 0.2);
+    if (bounds.isEmpty()) return;
+    for (const x of [bounds.min.x, bounds.max.x]) {
+      for (const y of [bounds.min.y, bounds.max.y]) {
+        for (const z of [bounds.min.z, bounds.max.z]) {
+          const point = new THREE.Vector3(x, y, z).sub(target).applyQuaternion(rotation);
+          distance = Math.max(distance, point.z + Math.max(Math.abs(point.x) / tanX, Math.abs(point.y) / tanY) * 1.08);
+        }
+      }
+    }
+  });
+  camera.position.copy(target).add(new THREE.Vector3(0, 0, Math.max(3, distance)).applyQuaternion(camera.quaternion));
+  camera.updateMatrixWorld(true);
+  const previousSize = renderer.getSize(new THREE.Vector2());
+  const previousPixelRatio = renderer.getPixelRatio();
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('无法生成关键图像');
+  try {
+    renderer.setPixelRatio(1);
+    renderer.setSize(width, height - labelHeight, false);
+    renderer.render(scene, camera);
+    context.fillStyle = theme === 'light' ? '#f5f8fb' : '#111a23';
+    context.fillRect(0, 0, width, height);
+    context.drawImage(renderer.domElement, 0, labelHeight);
+    const angles = scene.children.find((child) => child.userData.snapshotAngles)?.userData.snapshotAngles as
+      { alpha: number | null; beta: number | null } | undefined;
+    context.font = 'italic 700 108px "Times New Roman", serif';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    const labels = [
+      { text: `α = ${formatAngleValue(angles?.alpha)}`, x: width / 4, color: theme === 'light' ? '#0082a0' : '#9df4ff' },
+      { text: `β = ${formatAngleValue(angles?.beta)}`, x: (width * 3) / 4, color: theme === 'light' ? '#d9480f' : '#ff8f73' },
+    ];
+    for (const label of labels) {
+      context.fillStyle = label.color;
+      context.fillText(label.text, label.x, labelHeight / 2, width / 2 - 32);
+    }
+    return canvas.toDataURL('image/png');
+  } finally {
+    renderer.setPixelRatio(previousPixelRatio);
+    renderer.setSize(previousSize.x, previousSize.y, false);
+    renderer.render(scene, liveCamera);
+  }
 }
 
 function applyCameraControlMode(controls: OrbitControls, isViewLocked: boolean, isZyViewActive: boolean) {
@@ -1301,10 +1379,6 @@ function createSnapshotAngleGuideGroup(metrics: DirectionMetrics, theme: Visuali
     const alpha = computeClockwiseAngleToPositiveY(metrics.magneticFieldDirection);
     if (alpha !== null) {
       group.add(createClockwiseAngleArc(origin, alpha, radiusAlpha, alphaColor, 0.026));
-      const label = createTextSprite(`α = ${alpha.toFixed(1)}°`, alphaColor);
-      label.scale.set(3.65, 1.02, 1);
-      label.position.copy(pointOnClassroomAngle(origin, alpha / 2, radiusAlpha + 0.22));
-      group.add(label);
     }
   }
 
@@ -1312,10 +1386,6 @@ function createSnapshotAngleGuideGroup(metrics: DirectionMetrics, theme: Visuali
     const beta = computeClockwiseAngleToPositiveY(metrics.magneticForceDirection);
     if (beta !== null) {
       group.add(createClockwiseAngleArc(origin, beta, radiusBeta, betaColor, 0.028));
-      const label = createTextSprite(`β = ${beta.toFixed(1)}°`, betaColor);
-      label.scale.set(3.65, 1.02, 1);
-      label.position.copy(pointOnClassroomAngle(origin, beta / 2, radiusBeta + 0.24));
-      group.add(label);
     }
   }
 

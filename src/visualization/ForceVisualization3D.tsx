@@ -972,9 +972,8 @@ function renderKeySnapshot(
   // Export at a fixed resolution rather than stretching the small live preview.
   const width = 1200;
   const height = 900;
-  const labelHeight = 140;
   const camera = liveCamera.clone();
-  camera.aspect = width / (height - labelHeight);
+  camera.aspect = width / height;
   camera.zoom = 1;
   camera.updateProjectionMatrix();
   const target = new THREE.Vector3(0, 0.12, 0);
@@ -1009,30 +1008,102 @@ function renderKeySnapshot(
   if (!context) throw new Error('无法生成关键图像');
   try {
     renderer.setPixelRatio(1);
-    renderer.setSize(width, height - labelHeight, false);
+    renderer.setSize(width, height, false);
     renderer.render(scene, camera);
     context.fillStyle = theme === 'light' ? '#f5f8fb' : '#111a23';
     context.fillRect(0, 0, width, height);
-    context.drawImage(renderer.domElement, 0, labelHeight);
+    context.drawImage(renderer.domElement, 0, 0);
     const angles = scene.children.find((child) => child.userData.snapshotAngles)?.userData.snapshotAngles as
       { alpha: number | null; beta: number | null } | undefined;
-    context.font = 'italic 700 108px "Times New Roman", serif';
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    const labels = [
-      { text: `α = ${formatAngleValue(angles?.alpha)}`, x: width / 4, color: theme === 'light' ? '#0082a0' : '#9df4ff' },
-      { text: `β = ${formatAngleValue(angles?.beta)}`, x: (width * 3) / 4, color: theme === 'light' ? '#d9480f' : '#ff8f73' },
-    ];
-    for (const label of labels) {
-      context.fillStyle = label.color;
-      context.fillText(label.text, label.x, labelHeight / 2, width / 2 - 32);
-    }
+    drawSnapshotAngleLabels(context, camera, angles, theme);
     return canvas.toDataURL('image/png');
   } finally {
     renderer.setPixelRatio(previousPixelRatio);
     renderer.setSize(previousSize.x, previousSize.y, false);
     renderer.render(scene, liveCamera);
   }
+}
+
+function drawSnapshotAngleLabels(
+  context: CanvasRenderingContext2D,
+  camera: THREE.PerspectiveCamera,
+  angles: { alpha: number | null; beta: number | null } | undefined,
+  theme: VisualizationTheme,
+) {
+  const { width, height } = context.canvas;
+  const pixels = context.getImageData(0, 0, width, height).data;
+  const background = theme === 'light' ? [245, 248, 251] : [17, 26, 35];
+  const origin = new THREE.Vector3(0.08, 0, 0);
+  const project = (point: THREE.Vector3) => {
+    const projected = point.project(camera);
+    return { x: (projected.x + 1) * width / 2, y: (1 - projected.y) * height / 2 };
+  };
+  type LabelBox = { x: number; y: number; width: number; height: number };
+  const occupied: LabelBox[] = [];
+  context.save();
+  // Around twice the original arc-label size at the gallery's display scale.
+  context.font = 'italic 700 84px "Times New Roman", serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  const labels = [
+    { symbol: 'α', angle: angles?.alpha, radius: 0.72, color: theme === 'light' ? '#0082a0' : '#9df4ff' },
+    { symbol: 'β', angle: angles?.beta, radius: 1.05, color: theme === 'light' ? '#d9480f' : '#ff8f73' },
+  ];
+  for (const label of labels) {
+    if (label.angle == null) continue;
+    const text = `${label.symbol} = ${formatAngleValue(label.angle)}`;
+    const boxWidth = context.measureText(text).width + 24;
+    const boxHeight = 100;
+    let best: { box: LabelBox; anchor: { x: number; y: number }; score: number } | undefined;
+    // Search beside this arc in screen space, keeping the label close to its anchor.
+    for (const fraction of [0.5, 0.32, 0.68, 0.16, 0.84]) {
+      const anchor = project(pointOnClassroomAngle(origin, label.angle * fraction, label.radius));
+      for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        for (const gap of [16, 40, 70]) {
+          const box = {
+            x: anchor.x + dx * (boxWidth / 2 + gap) - boxWidth / 2,
+            y: anchor.y + dy * (boxHeight / 2 + gap) - boxHeight / 2,
+            width: boxWidth,
+            height: boxHeight,
+          };
+          if (box.x < 20 || box.y < 20 || box.x + boxWidth > width - 20 || box.y + boxHeight > height - 20) continue;
+          if (occupied.some(other => box.x < other.x + other.width + 18 && box.x + boxWidth + 18 > other.x
+            && box.y < other.y + other.height + 18 && box.y + boxHeight + 18 > other.y)) continue;
+          let ink = 0;
+          let samples = 0;
+          for (let y = Math.ceil(box.y); y < box.y + boxHeight; y += 5) {
+            for (let x = Math.ceil(box.x); x < box.x + boxWidth; x += 5) {
+              const index = (y * width + x) * 4;
+              if (Math.max(...background.map((channel, i) => Math.abs(pixels[index + i] - channel))) > 45) ink += 1;
+              samples += 1;
+            }
+          }
+          const score = ink / samples * 1200 + gap * 0.15 + Math.abs(fraction - 0.5) * 10 + (dx && dy ? 8 : 0);
+          if (!best || score < best.score) best = { box, anchor, score };
+        }
+      }
+    }
+    if (!best) continue;
+    const { box, anchor } = best;
+    occupied.push(box);
+    const endpoint = { x: clamp(anchor.x, box.x, box.x + box.width), y: clamp(anchor.y, box.y, box.y + box.height) };
+    context.strokeStyle = label.color;
+    context.lineWidth = 3;
+    context.beginPath();
+    context.moveTo(anchor.x, anchor.y);
+    context.lineTo(endpoint.x, endpoint.y);
+    context.stroke();
+    context.fillStyle = label.color;
+    context.beginPath();
+    context.arc(anchor.x, anchor.y, 5, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = theme === 'light' ? '#f5f8fb' : '#111a23';
+    context.lineWidth = 9;
+    context.lineJoin = 'round';
+    context.strokeText(text, box.x + box.width / 2, box.y + box.height / 2);
+    context.fillText(text, box.x + box.width / 2, box.y + box.height / 2);
+  }
+  context.restore();
 }
 
 function applyCameraControlMode(controls: OrbitControls, isViewLocked: boolean, isZyViewActive: boolean) {

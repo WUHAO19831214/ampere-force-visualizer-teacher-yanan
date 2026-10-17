@@ -638,7 +638,7 @@ function SixSnapshotGrid({ snapshots, count, onClose }: { snapshots: KeySnapshot
             </button>
           </div>
         </div>
-        <div className={`six-snapshot-grid snapshot-gallery-${layoutClass}${displayAngleDifference ? ' has-angle-difference' : ''}`}>
+        <div className={`six-snapshot-grid snapshot-gallery-${layoutClass}`}>
           {visibleSnapshots.length === 0 && <p className="snapshot-empty">暂无关键图像记录。</p>}
           {visibleSnapshots.map((snapshot) => (
             <figure key={snapshot.id}>
@@ -650,8 +650,8 @@ function SixSnapshotGrid({ snapshots, count, onClose }: { snapshots: KeySnapshot
                       <span>I: {snapshot.currentDirection ?? '--'}</span>
                       <span>α：{formatAngleValue(snapshot.alphaDeg)}</span>
                       <span>β：{formatAngleValue(snapshot.betaDeg)}</span>
-                      {displayAngleDifference && (
-                        <span className="snapshot-angle-difference">
+                      {count === 8 && (
+                        <span className="snapshot-angle-difference" aria-hidden={!displayAngleDifference}>
                           β−α: {formatAngleValue(snapshot.alphaDeg != null && snapshot.betaDeg != null
                             ? snapshot.betaDeg - snapshot.alphaDeg : null)}
                         </span>

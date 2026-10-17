@@ -2009,7 +2009,8 @@ button:disabled {
 
 .six-snapshot-grid.snapshot-gallery-eight {
   grid-template-columns: repeat(4, minmax(300px, 1fr));
-  grid-template-rows: repeat(2, minmax(540px, 1fr));
+  /* Reserve the fourth readout line before showing the angle difference. */
+  grid-template-rows: repeat(2, minmax(610px, 1fr));
 }
 
 .six-snapshot-grid.snapshot-gallery-four {
@@ -2017,13 +2018,18 @@ button:disabled {
   grid-template-rows: repeat(2, minmax(620px, 1fr));
 }
 
-.snapshot-gallery-eight.has-angle-difference {
-  grid-template-columns: repeat(4, minmax(400px, 1fr));
-  grid-template-rows: repeat(2, minmax(610px, 1fr));
+.snapshot-gallery-eight figcaption {
+  container-type: inline-size;
 }
 
 .snapshot-gallery-eight .snapshot-angle-difference {
   color: #bdf4ff;
+  font-size: clamp(32px, 12cqi, 60px);
+  line-height: 69px;
+}
+
+.snapshot-gallery-eight .snapshot-angle-difference[aria-hidden="true"] {
+  visibility: hidden;
 }
 
 .snapshot-gallery-eight figure,

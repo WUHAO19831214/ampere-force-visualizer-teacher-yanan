@@ -88,27 +88,25 @@ export function ResizableThreePanelLayout({ left, middle, rightTop, rightBottom 
         </button>
       </div>
       <section className="three-panel-layout">
-        {!layout.leftCollapsed && (
-          <>
-            <div className="layout-panel left-layout-panel" style={{ width: `${layout.left}%` }}>
-              {left}
-              <button
-                className="left-panel-collapse-toggle"
-                onClick={toggleLeftPanel}
-                aria-label="收起屏幕 ROI 数字读取区"
-                title="收起屏幕 ROI 数字读取区"
-              >
-                ‹
-              </button>
-            </div>
-            <div
-              className="panel-resizer panel-resizer-x"
-              onPointerDown={(event) => startHorizontalDrag('left-middle', event)}
-              role="separator"
-              aria-label="调整左侧与中间宽度"
-            />
-          </>
-        )}
+        {/* Keep capture and OCR mounted so collapsing only changes visibility. */}
+        <div className="layout-panel left-layout-panel" hidden={layout.leftCollapsed} style={{ width: `${layout.left}%` }}>
+          {left}
+          <button
+            className="left-panel-collapse-toggle"
+            onClick={toggleLeftPanel}
+            aria-label="收起屏幕 ROI 数字读取区"
+            title="收起屏幕 ROI 数字读取区"
+          >
+            ‹
+          </button>
+        </div>
+        <div
+          className="panel-resizer panel-resizer-x"
+          hidden={layout.leftCollapsed}
+          onPointerDown={(event) => startHorizontalDrag('left-middle', event)}
+          role="separator"
+          aria-label="调整左侧与中间宽度"
+        />
         {layout.leftCollapsed && (
           <div className="left-panel-collapsed-rail">
             <button

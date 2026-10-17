@@ -1,8 +1,11 @@
 import type { VisionRoiConfig, VisionSample } from '../types/vision';
 import type { MagneticFieldDetectionResult } from '../types/vision';
 import { VisionRoiBox } from './VisionRoiBox';
+import type { CSSProperties } from 'react';
 
 interface CameraOverlayProps {
+  style: CSSProperties;
+  videoScale: number;
   rois: VisionRoiConfig[];
   latestValues: Record<string, VisionSample>;
   magneticDetection?: MagneticFieldDetectionResult;
@@ -11,32 +14,40 @@ interface CameraOverlayProps {
   onChange: (roi: VisionRoiConfig) => void;
 }
 
-export function CameraOverlay({ rois, latestValues, magneticDetection, selectedId, onSelect, onChange }: CameraOverlayProps) {
+export function CameraOverlay({ style, videoScale, rois, latestValues, magneticDetection, selectedId, onSelect, onChange }: CameraOverlayProps) {
+  const warning = magneticDetection?.frameWidth && magneticDetection.frameHeight && (!magneticDetection.nPole || !magneticDetection.sPole)
+    ? magneticDetection.warning ?? '等待 N/S 标记'
+    : null;
   return (
-    <div className="overlay-layer camera-overlay-layer">
-      <MagneticFieldOverlay detection={magneticDetection} />
-      {rois.map((roi) => {
-        const latest = latestValues[roi.id];
-        const text = latest ? `x ${latest.x ?? '-'} / y ${latest.y ?? '-'}` : undefined;
-        return (
-          <VisionRoiBox
-            key={roi.id}
-            roi={roi}
-            latestValue={text}
-            selected={selectedId === roi.id}
-            onSelect={() => onSelect(roi.id)}
-            onChange={onChange}
-          />
-        );
-      })}
-    </div>
+    <>
+      <div className="overlay-layer camera-overlay-layer" style={style}>
+        <MagneticFieldOverlay detection={magneticDetection} videoScale={videoScale} />
+        {rois.map((roi) => {
+          const latest = latestValues[roi.id];
+          const text = latest ? `x ${latest.x ?? '-'} / y ${latest.y ?? '-'}` : undefined;
+          return (
+            <VisionRoiBox
+              key={roi.id}
+              roi={roi}
+              latestValue={text}
+              selected={selectedId === roi.id}
+              onSelect={() => onSelect(roi.id)}
+              onChange={onChange}
+            />
+          );
+        })}
+      </div>
+      {warning ? <div className="magnetic-status-chip">{warning}</div> : null}
+    </>
   );
 }
 
-function MagneticFieldOverlay({ detection }: { detection?: MagneticFieldDetectionResult }) {
+function MagneticFieldOverlay({ detection, videoScale }: { detection?: MagneticFieldDetectionResult; videoScale: number }) {
   if (!detection?.frameWidth || !detection.frameHeight) return null;
-  const nPole = detection.nPole ? toPercentPoint(detection.nPole.x, detection.nPole.y, detection.frameWidth, detection.frameHeight) : undefined;
-  const sPole = detection.sPole ? toPercentPoint(detection.sPole.x, detection.sPole.y, detection.frameWidth, detection.frameHeight) : undefined;
+  const nMarker = detection.nPole;
+  const sMarker = detection.sPole;
+  const nPole = nMarker ? toPercentPoint(nMarker.x, nMarker.y, detection.frameWidth, detection.frameHeight) : undefined;
+  const sPole = sMarker ? toPercentPoint(sMarker.x, sMarker.y, detection.frameWidth, detection.frameHeight) : undefined;
 
   return (
     <div className="magnetic-camera-overlay">
@@ -56,28 +67,32 @@ function MagneticFieldOverlay({ detection }: { detection?: MagneticFieldDetectio
           </span>
         </div>
       )}
-      {nPole && sPole && (
-        <svg className="magnetic-direction-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      {nMarker && sMarker && (
+        <svg className="magnetic-direction-svg" viewBox={`0 0 ${detection.frameWidth} ${detection.frameHeight}`} preserveAspectRatio="none" aria-hidden="true">
           <defs>
-            <marker id="magnetic-arrow-head" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <marker id="magnetic-arrow-head" markerWidth="7" markerHeight="7" refX="7" refY="3.5" orient="auto">
               <path d="M0,0 L7,3.5 L0,7 Z" fill="#79e4ff" />
             </marker>
           </defs>
           <line
-            x1={nPole.x}
-            y1={nPole.y}
-            x2={sPole.x}
-            y2={sPole.y}
+            x1={nMarker.x}
+            y1={nMarker.y}
+            x2={sMarker.x}
+            y2={sMarker.y}
             stroke="#79e4ff"
-            strokeWidth="0.75"
+            strokeWidth={4 / videoScale}
             markerEnd="url(#magnetic-arrow-head)"
           />
-          <text x={(nPole.x + sPole.x) / 2} y={(nPole.y + sPole.y) / 2 - 3} textAnchor="middle">
+          <text
+            x={(nMarker.x + sMarker.x) / 2}
+            y={(nMarker.y + sMarker.y) / 2 - 24 / videoScale}
+            textAnchor="middle"
+            style={{ fontSize: 24 / videoScale, strokeWidth: 3 / videoScale }}
+          >
             B: N → S
           </text>
         </svg>
       )}
-      {!nPole || !sPole ? <div className="magnetic-status-chip">{detection.warning ?? '等待 N/S 标记'}</div> : null}
     </div>
   );
 }

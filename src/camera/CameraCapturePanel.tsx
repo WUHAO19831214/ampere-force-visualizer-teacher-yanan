@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import type { VisionAnalyzer, VisionRoiConfig } from '../types/vision';
 import { listVideoInputDevices, downloadCanvasAsPng } from '../utils/cameraUtils';
 import { cropRoiFromVideo } from '../utils/imagePreprocess';
+import { getRenderedVideoRect, type Size } from '../utils/coordinateMapper';
 import { experimentDataActions, useExperimentDataStore } from '../store/useExperimentDataStore';
 import { MockVisionAnalyzer } from '../vision/MockVisionAnalyzer';
 import { ColorTrackingAnalyzer } from '../vision/ColorTrackingAnalyzer';
@@ -35,11 +36,14 @@ function blankImageData() {
 
 export function CameraCapturePanel() {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
   const magneticFrameCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [deviceId, setDeviceId] = useState<string>('');
   const [isCameraOn, setIsCameraOn] = useState(false);
+  const [previewSize, setPreviewSize] = useState<Size>({ width: 1, height: 1 });
+  const [videoSize, setVideoSize] = useState<Size>({ width: 16, height: 9 });
   const [visionRois, setVisionRois] = useState(defaultVisionRois);
   const [selectedId, setSelectedId] = useState(defaultVisionRois[0].id);
   const { latestVisionValues, latestMagneticFieldDetection, magneticFieldConfig } = useExperimentDataStore();
@@ -55,6 +59,31 @@ export function CameraCapturePanel() {
     [],
   );
   const magneticDetector = useMemo(() => new MagneticFieldMarkerDetector(), []);
+
+  const renderedVideoRect = getRenderedVideoRect(videoSize, previewSize, 'cover');
+  const videoLayoutStyle = {
+    left: renderedVideoRect.x,
+    top: renderedVideoRect.y,
+    width: renderedVideoRect.width,
+    height: renderedVideoRect.height,
+  };
+
+  useLayoutEffect(() => {
+    const preview = previewRef.current;
+    if (!preview) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setPreviewSize({ width: entry.contentRect.width, height: entry.contentRect.height });
+    });
+    observer.observe(preview);
+    return () => observer.disconnect();
+  }, []);
+
+  const updateVideoSize = () => {
+    const video = videoRef.current;
+    if (video?.videoWidth && video.videoHeight) {
+      setVideoSize({ width: video.videoWidth, height: video.videoHeight });
+    }
+  };
 
   useEffect(() => {
     listVideoInputDevices().then(setDevices).catch(() => setDevices([]));
@@ -192,8 +221,16 @@ export function CameraCapturePanel() {
           <p>识别 N、S 极并读取磁场方向</p>
         </div>
       </div>
-      <div className="media-stage">
-        <video ref={videoRef} className="capture-video camera-video" muted playsInline />
+      <div className="media-stage" ref={previewRef}>
+        <video
+          ref={videoRef}
+          className="capture-video camera-video"
+          muted
+          playsInline
+          onLoadedMetadata={updateVideoSize}
+          onResize={updateVideoSize}
+          style={videoLayoutStyle}
+        />
         {!isCameraOn && (
           <div className="stage-placeholder">
             <strong>尚未打开摄像头</strong>
@@ -201,6 +238,8 @@ export function CameraCapturePanel() {
           </div>
         )}
         <CameraOverlay
+          style={videoLayoutStyle}
+          videoScale={renderedVideoRect.width / videoSize.width}
           rois={visionRois}
           latestValues={latestVisionValues}
           magneticDetection={latestMagneticFieldDetection}

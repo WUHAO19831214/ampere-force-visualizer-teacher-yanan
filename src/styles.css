@@ -421,7 +421,8 @@ button:disabled {
 }
 
 .camera-video {
-  object-fit: cover;
+  position: absolute;
+  object-fit: fill;
 }
 
 .stage-placeholder {
@@ -452,7 +453,7 @@ button:disabled {
 }
 
 .camera-overlay-layer {
-  inset: 0;
+  inset: auto;
 }
 
 .magnetic-camera-overlay {
@@ -524,6 +525,8 @@ button:disabled {
 
 .magnetic-status-chip {
   position: absolute;
+  z-index: 3;
+  pointer-events: none;
   left: 10px;
   bottom: 10px;
   max-width: calc(100% - 20px);

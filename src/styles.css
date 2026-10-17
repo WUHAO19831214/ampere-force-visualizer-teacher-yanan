@@ -1894,6 +1894,17 @@ button:disabled {
   font-size: 16px;
 }
 
+.snapshot-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.snapshot-modal-actions button[aria-pressed="true"] {
+  background: #bdf4ff;
+  color: #102b3a;
+}
+
 .snapshot-modal-head span {
   color: #aebfcd;
   font-size: 12px;
@@ -2004,6 +2015,15 @@ button:disabled {
 .six-snapshot-grid.snapshot-gallery-four {
   grid-template-columns: repeat(2, minmax(300px, 1fr));
   grid-template-rows: repeat(2, minmax(620px, 1fr));
+}
+
+.snapshot-gallery-eight.has-angle-difference {
+  grid-template-columns: repeat(4, minmax(400px, 1fr));
+  grid-template-rows: repeat(2, minmax(610px, 1fr));
+}
+
+.snapshot-gallery-eight .snapshot-angle-difference {
+  color: #bdf4ff;
 }
 
 .snapshot-gallery-eight figure,

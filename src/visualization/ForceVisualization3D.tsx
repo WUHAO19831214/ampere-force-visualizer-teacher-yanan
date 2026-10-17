@@ -616,6 +616,8 @@ function SnapshotModal({ snapshot, onClose }: { snapshot: KeySnapshot; onClose: 
 }
 
 function SixSnapshotGrid({ snapshots, count, onClose }: { snapshots: KeySnapshot[]; count: number; onClose: () => void }) {
+  const [showAngleDifference, setShowAngleDifference] = useState(false);
+  const displayAngleDifference = count === 8 && showAngleDifference;
   const visibleSnapshots = snapshots.slice(-count);
   const layoutClass = count <= 2 ? 'two' : count <= 4 ? 'four' : count <= 6 ? 'six' : count <= 8 ? 'eight' : 'ten';
   return (
@@ -625,11 +627,18 @@ function SixSnapshotGrid({ snapshots, count, onClose }: { snapshots: KeySnapshot
           <div>
             <h3>关键图像展示</h3>
           </div>
-          <button type="button" onClick={onClose}>
-            关闭
-          </button>
+          <div className="snapshot-modal-actions">
+            {count === 8 && (
+              <button type="button" aria-pressed={showAngleDifference} onClick={() => setShowAngleDifference(current => !current)}>
+                β-α
+              </button>
+            )}
+            <button type="button" onClick={onClose}>
+              关闭
+            </button>
+          </div>
         </div>
-        <div className={`six-snapshot-grid snapshot-gallery-${layoutClass}`}>
+        <div className={`six-snapshot-grid snapshot-gallery-${layoutClass}${displayAngleDifference ? ' has-angle-difference' : ''}`}>
           {visibleSnapshots.length === 0 && <p className="snapshot-empty">暂无关键图像记录。</p>}
           {visibleSnapshots.map((snapshot) => (
             <figure key={snapshot.id}>
@@ -641,6 +650,12 @@ function SixSnapshotGrid({ snapshots, count, onClose }: { snapshots: KeySnapshot
                       <span>I: {snapshot.currentDirection ?? '--'}</span>
                       <span>α：{formatAngleValue(snapshot.alphaDeg)}</span>
                       <span>β：{formatAngleValue(snapshot.betaDeg)}</span>
+                      {displayAngleDifference && (
+                        <span className="snapshot-angle-difference">
+                          β−α: {formatAngleValue(snapshot.alphaDeg != null && snapshot.betaDeg != null
+                            ? snapshot.betaDeg - snapshot.alphaDeg : null)}
+                        </span>
+                      )}
                     </>
                   ) : (
                     <>
